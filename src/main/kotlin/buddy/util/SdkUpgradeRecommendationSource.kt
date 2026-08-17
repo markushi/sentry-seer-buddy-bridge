@@ -13,6 +13,7 @@ import io.sentry.buddy.flow.RecommendationEngine
 import io.sentry.buddy.flow.SentryIssue
 import io.sentry.buddy.flow.Severity
 import kotlinx.serialization.Serializable
+import org.slf4j.LoggerFactory
 import java.util.UUID
 
 @Serializable
@@ -22,6 +23,8 @@ class SdkUpgradeRecommendationSource(
     private val httpClient: HttpClient = HttpClient(CIO) { install(ContentNegotiation) { json() } },
     private val releasesUrl: String = "https://api.github.com/repos/getsentry/sentry-java/releases/latest"
 ) : RecommendationEngine {
+
+    private val logger = LoggerFactory.getLogger(SdkUpgradeRecommendationSource::class.java)
 
     override suspend fun generateRecommendations(
         request: FlowAnalysisRequest,
@@ -50,6 +53,7 @@ class SdkUpgradeRecommendationSource(
             .tag_name
             .removePrefix("v")
     } catch (e: Exception) {
+        logger.warn("Failed to fetch the latest sentry-java release", e)
         null
     }
 
@@ -57,8 +61,8 @@ class SdkUpgradeRecommendationSource(
         sdk.substringAfter("@", missingDelimiterValue = "").ifBlank { null }
 
     internal fun isOutdated(current: String, latest: String): Boolean {
-        val currentParts = current.split(".").mapNotNull { it.toIntOrNull() }
-        val latestParts = latest.split(".").mapNotNull { it.toIntOrNull() }
+        val currentParts = current.split(".").map { it.toIntOrNull() ?: 0 }
+        val latestParts = latest.split(".").map { it.toIntOrNull() ?: 0 }
         val length = maxOf(currentParts.size, latestParts.size)
         for (i in 0 until length) {
             val currentPart = currentParts.getOrElse(i) { 0 }
