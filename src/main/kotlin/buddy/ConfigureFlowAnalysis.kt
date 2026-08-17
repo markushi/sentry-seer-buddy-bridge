@@ -8,6 +8,9 @@ fun Application.configureFlowAnalysis(
         store = FlowAnalysisStore(
             File(environment.config.propertyOrNull("flowAnalysis.dataDir")?.getString() ?: "data/flow-analysis")
         ),
+        issueFetcher = System.getenv("SENTRY_AUTH_TOKEN")
+            ?.let { token -> SentryIssuesClient(authToken = token) }
+            ?: NoOpIssueFetcher,
         titleGenerator = ClaudeCliTitleGenerator()
     )
 ) {
