@@ -10,6 +10,7 @@ import io.ktor.client.request.parameter
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import org.slf4j.LoggerFactory
 import java.net.URI
 
 @Serializable
@@ -28,12 +29,15 @@ class SentryIssuesClient(
     private val baseUrl: String = "https://sentry.io"
 ) : IssueFetcher {
 
+    private val logger = LoggerFactory.getLogger(SentryIssuesClient::class.java)
+
     override suspend fun fetchIssues(request: FlowAnalysisRequest): List<SentryIssue> {
         val org = organizationSlugFrom(request.dsn) ?: return emptyList()
 
         val events = try {
             request.traceIds.flatMap { traceId -> fetchEventsForTrace(org, traceId) }
         } catch (e: Exception) {
+            logger.warn("Failed to fetch Sentry issues for org $org", e)
             return emptyList()
         }
 
