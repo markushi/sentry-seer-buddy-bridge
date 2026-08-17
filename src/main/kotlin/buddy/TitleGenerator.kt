@@ -16,13 +16,12 @@ class ClaudeCliTitleGenerator : TitleGenerator {
             appendLine("Event types observed: ${request.events.map { it.type }.distinct().joinToString(", ")}")
         }
 
-        val process = ProcessBuilder("claude", "-p", prompt).start()
+        val process = ProcessBuilder("claude", "-p", prompt).redirectErrorStream(true).start()
         val output = process.inputStream.bufferedReader().readText().trim()
         val exitCode = process.waitFor()
 
         if (exitCode != 0) {
-            val stderr = process.errorStream.bufferedReader().readText().trim()
-            throw IllegalStateException("claude -p exited with code $exitCode: $stderr")
+            throw IllegalStateException("claude -p exited with code $exitCode: $output")
         }
 
         return output.ifBlank { "Untitled flow" }
