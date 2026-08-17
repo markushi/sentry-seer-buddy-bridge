@@ -2,6 +2,7 @@ package io.sentry.buddy.flow
 
 import io.ktor.server.application.Application
 import io.sentry.buddy.tooling.ClaudeCliTitleGenerator
+import io.sentry.buddy.tooling.SdkUpgradeRecommendationSource
 import io.sentry.buddy.tooling.SentryApiClient
 import java.io.File
 
@@ -14,6 +15,7 @@ fun Application.configureFlowAnalysis(
             ?.takeIf { it.isNotBlank() }
             ?.let { token -> SentryApiClient(authToken = token) }
             ?: NoOpIssueFetcher,
+        recommendationEngine = CompositeRecommendationEngine(listOf(SdkUpgradeRecommendationSource())),
         titleGenerator = ClaudeCliTitleGenerator()
     )
 ) {
