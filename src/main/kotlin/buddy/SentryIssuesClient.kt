@@ -72,7 +72,9 @@ class SentryIssuesClient(
     }
 
     internal fun organizationSlugFrom(dsn: String): String? = try {
-        URI(dsn).host?.substringBefore(".")?.ifBlank { null }
+        URI(dsn).host?.substringBefore(".")?.ifBlank { null }?.let { prefix ->
+            Regex("^o(\\d+)$").matchEntire(prefix)?.groupValues?.get(1) ?: prefix
+        }
     } catch (e: Exception) {
         null
     }

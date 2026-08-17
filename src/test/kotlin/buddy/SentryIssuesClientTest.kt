@@ -31,7 +31,14 @@ class SentryIssuesClientTest {
     fun `organizationSlugFrom extracts the org from a standard ingest DSN`() {
         val client = SentryIssuesClient(authToken = "token")
 
-        assertEquals("o123", client.organizationSlugFrom("https://examplekey@o123.ingest.sentry.io/456"))
+        assertEquals("123", client.organizationSlugFrom("https://examplekey@o123.ingest.sentry.io/456"))
+    }
+
+    @Test
+    fun `organizationSlugFrom strips the leading o from a numeric ingest-host org id`() {
+        val client = SentryIssuesClient(authToken = "token")
+
+        assertEquals("447951", client.organizationSlugFrom("https://examplekey@o447951.ingest.sentry.io/456"))
     }
 
     @Test
