@@ -1,4 +1,4 @@
-package io.sentry.buddy
+package io.sentry.buddy.flow
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

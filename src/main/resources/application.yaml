@@ -3,9 +3,8 @@ ktor:
     port: 8080
   application:
     modules:
-      - io.sentry.SerializationKt.configureSerialization
-      - io.sentry.RoutingKt.configureRouting
-      - io.sentry.buddy.ConfigureFlowAnalysisKt.configureFlowAnalysis
+      - io.sentry.buddy.SerializationKt.configureSerialization
+      - io.sentry.buddy.flow.ConfigureFlowAnalysisKt.configureFlowAnalysis
 
 flowAnalysis:
   dataDir: "data/flow-analysis"

@@ -9,12 +9,15 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
+import io.sentry.buddy.flow.FlowAnalysisEvent
+import io.sentry.buddy.flow.FlowAnalysisRequest
+import io.sentry.buddy.tooling.SentryApiClient
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class SentryIssuesClientTest {
+class SentryApiClientTest {
 
     private fun sampleRequest(dsn: String = "https://examplekey@o123.ingest.sentry.io/456") = FlowAnalysisRequest(
         flowId = "flow-1",
@@ -29,21 +32,21 @@ class SentryIssuesClientTest {
 
     @Test
     fun `organizationSlugFrom extracts the org from a standard ingest DSN`() {
-        val client = SentryIssuesClient(authToken = "token")
+        val client = SentryApiClient(authToken = "token")
 
         assertEquals("123", client.organizationSlugFrom("https://examplekey@o123.ingest.sentry.io/456"))
     }
 
     @Test
     fun `organizationSlugFrom strips the leading o from a numeric ingest-host org id`() {
-        val client = SentryIssuesClient(authToken = "token")
+        val client = SentryApiClient(authToken = "token")
 
         assertEquals("447951", client.organizationSlugFrom("https://examplekey@o447951.ingest.sentry.io/456"))
     }
 
     @Test
     fun `organizationSlugFrom returns null for an unparseable dsn`() {
-        val client = SentryIssuesClient(authToken = "token")
+        val client = SentryApiClient(authToken = "token")
 
         assertEquals(null, client.organizationSlugFrom("not a uri"))
     }
@@ -65,7 +68,7 @@ class SentryIssuesClientTest {
             )
         }
         val httpClient = HttpClient(mockEngine) { install(ContentNegotiation) { json() } }
-        val client = SentryIssuesClient(authToken = "token", httpClient = httpClient)
+        val client = SentryApiClient(authToken = "token", httpClient = httpClient)
 
         val issues = client.fetchIssues(sampleRequest())
 
@@ -80,7 +83,7 @@ class SentryIssuesClientTest {
     fun `fetchIssues returns an empty list when the dsn cannot be parsed`() = runBlocking {
         val mockEngine = MockEngine { _ -> respond(content = "[]", status = HttpStatusCode.OK) }
         val httpClient = HttpClient(mockEngine) { install(ContentNegotiation) { json() } }
-        val client = SentryIssuesClient(authToken = "token", httpClient = httpClient)
+        val client = SentryApiClient(authToken = "token", httpClient = httpClient)
 
         val issues = client.fetchIssues(sampleRequest(dsn = "not a uri"))
 

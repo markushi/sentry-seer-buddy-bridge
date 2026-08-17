@@ -1,4 +1,4 @@
-package io.sentry.buddy
+package io.sentry.buddy.flow
 
 fun interface IssueFetcher {
     suspend fun fetchIssues(request: FlowAnalysisRequest): List<SentryIssue>

@@ -1,5 +1,15 @@
 package io.sentry.buddy
 
+import io.sentry.buddy.flow.AnalysisStatus
+import io.sentry.buddy.flow.FlowAnalysisEvent
+import io.sentry.buddy.flow.FlowAnalysisRequest
+import io.sentry.buddy.flow.FlowAnalysisResponse
+import io.sentry.buddy.flow.FlowAnalysisService
+import io.sentry.buddy.flow.FlowAnalysisStore
+import io.sentry.buddy.flow.Recommendation
+import io.sentry.buddy.flow.RecommendationStatus
+import io.sentry.buddy.flow.ResolveOutcome
+import io.sentry.buddy.tooling.TitleGenerator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.json.JsonObject
@@ -84,7 +94,7 @@ class FlowAnalysisServiceTest {
         val outcome = service.resolveRecommendation("flow-1", "rec-1")
 
         assertTrue(outcome is ResolveOutcome.Success)
-        val resolved = (outcome as ResolveOutcome.Success).response.recommendations.single()
+        val resolved = outcome.response.recommendations.single()
         assertEquals(RecommendationStatus.RESOLVED, resolved.status)
     }
 

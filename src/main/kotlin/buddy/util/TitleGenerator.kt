@@ -1,4 +1,6 @@
-package io.sentry.buddy
+package io.sentry.buddy.tooling
+
+import io.sentry.buddy.flow.FlowAnalysisRequest
 
 fun interface TitleGenerator {
     suspend fun generateTitle(request: FlowAnalysisRequest): String

@@ -1,5 +1,6 @@
-package io.sentry.buddy
+package io.sentry.buddy.flow
 
+import io.sentry.buddy.tooling.TitleGenerator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

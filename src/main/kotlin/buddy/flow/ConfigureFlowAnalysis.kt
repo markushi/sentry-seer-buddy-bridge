@@ -1,6 +1,8 @@
-package io.sentry.buddy
+package io.sentry.buddy.flow
 
 import io.ktor.server.application.Application
+import io.sentry.buddy.tooling.ClaudeCliTitleGenerator
+import io.sentry.buddy.tooling.SentryApiClient
 import java.io.File
 
 fun Application.configureFlowAnalysis(
@@ -10,7 +12,7 @@ fun Application.configureFlowAnalysis(
         ),
         issueFetcher = System.getenv("SENTRY_AUTH_TOKEN")
             ?.takeIf { it.isNotBlank() }
-            ?.let { token -> SentryIssuesClient(authToken = token) }
+            ?.let { token -> SentryApiClient(authToken = token) }
             ?: NoOpIssueFetcher,
         titleGenerator = ClaudeCliTitleGenerator()
     )

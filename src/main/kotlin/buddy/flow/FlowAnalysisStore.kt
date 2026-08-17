@@ -1,4 +1,4 @@
-package io.sentry.buddy
+package io.sentry.buddy.flow
 
 import kotlinx.serialization.json.Json
 import java.io.File

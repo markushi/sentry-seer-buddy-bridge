@@ -1,4 +1,4 @@
-package io.sentry.buddy
+package io.sentry.buddy.tooling
 
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -8,6 +8,9 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.serialization.kotlinx.json.json
+import io.sentry.buddy.flow.FlowAnalysisRequest
+import io.sentry.buddy.flow.IssueFetcher
+import io.sentry.buddy.flow.SentryIssue
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
@@ -23,13 +26,13 @@ private data class SentryEventDto(
     val permalink: String? = null
 )
 
-class SentryIssuesClient(
+class SentryApiClient(
     private val authToken: String,
     private val httpClient: HttpClient = HttpClient(CIO) { install(ContentNegotiation) { json() } },
     private val baseUrl: String = "https://sentry.io"
 ) : IssueFetcher {
 
-    private val logger = LoggerFactory.getLogger(SentryIssuesClient::class.java)
+    private val logger = LoggerFactory.getLogger(SentryApiClient::class.java)
 
     override suspend fun fetchIssues(request: FlowAnalysisRequest): List<SentryIssue> {
         val org = organizationSlugFrom(request.dsn) ?: return emptyList()

@@ -1,5 +1,10 @@
 package io.sentry.buddy
 
+import io.sentry.buddy.flow.AnalysisStatus
+import io.sentry.buddy.flow.FlowAnalysisEvent
+import io.sentry.buddy.flow.FlowAnalysisRequest
+import io.sentry.buddy.flow.FlowAnalysisResponse
+import io.sentry.buddy.flow.FlowAnalysisStore
 import kotlinx.serialization.json.JsonObject
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
@@ -39,7 +44,8 @@ class FlowAnalysisStoreTest {
     @Test
     fun `saveResult then loadResult returns the same result`() {
         val store = newStore()
-        val response = FlowAnalysisResponse(flowId = "flow-1", status = AnalysisStatus.COMPLETED, title = "Checkout flow")
+        val response =
+            FlowAnalysisResponse(flowId = "flow-1", status = AnalysisStatus.COMPLETED, title = "Checkout flow")
 
         store.saveResult(response)
 
