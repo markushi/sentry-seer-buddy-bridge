@@ -6,6 +6,18 @@
 
 **Architecture:** `SdkUpgradeRecommendationSource` implements the existing `RecommendationEngine` interface (from Plan 1) directly — it's just a second implementation, not a new abstraction. A new `CompositeRecommendationEngine` implements `RecommendationEngine` by concatenating results from a list of other `RecommendationEngine`s, so `ConfigureFlowAnalysis.kt` can combine this source with future ones (Plan 4's LLM source) without changing `FlowAnalysisService`.
 
+**Package layout (per the post-Plan-2 refactor):** the codebase now splits `io.sentry.buddy` into
+`io.sentry.buddy.flow` (domain models, service, routes, and pipeline-dependency interfaces — no
+outbound I/O) and `io.sentry.buddy.tooling` (integrations that call external systems — the Claude
+CLI, the Sentry API). `CompositeRecommendationEngine` is pure in-process composition with no I/O,
+so it belongs in `io.sentry.buddy.flow` alongside `RecommendationEngine`/`NoOpRecommendationEngine`.
+`SdkUpgradeRecommendationSource` calls the GitHub API, so it belongs in `io.sentry.buddy.tooling`
+alongside `SentryApiClient`/`ClaudeCliTitleGenerator` — physically under `src/main/kotlin/buddy/util/`
+(the directory is named `util`; the package is `tooling` — an existing inconsistency in the
+refactor, not something this plan introduces or fixes). Test files stay flat under
+`src/test/kotlin/buddy/` with package `io.sentry.buddy`, importing `flow`/`tooling` types
+explicitly — matching the existing test files' convention.
+
 **Tech Stack:** Reuses the Ktor client added in Plan 2 (Sentry Issue Fetching) for the GitHub API call.
 
 **Spec:** `docs/superpowers/specs/2026-08-17-flow-analysis-api-design.md`, section 5.1.
@@ -32,19 +44,19 @@ plan doc first).
 
 ## File Structure
 
-- Create: `src/main/kotlin/buddy/SdkUpgradeRecommendationSource.kt`
-- Create: `src/main/kotlin/buddy/CompositeRecommendationEngine.kt`
-- Modify: `src/main/kotlin/buddy/ConfigureFlowAnalysis.kt` — wire `CompositeRecommendationEngine(listOf(SdkUpgradeRecommendationSource()))` in place of `NoOpRecommendationEngine`.
-- Test: `src/test/kotlin/buddy/SdkUpgradeRecommendationSourceTest.kt`
-- Test: `src/test/kotlin/buddy/CompositeRecommendationEngineTest.kt`
+- Create: `src/main/kotlin/buddy/flow/CompositeRecommendationEngine.kt` (package `io.sentry.buddy.flow`)
+- Create: `src/main/kotlin/buddy/util/SdkUpgradeRecommendationSource.kt` (package `io.sentry.buddy.tooling`)
+- Modify: `src/main/kotlin/buddy/flow/ConfigureFlowAnalysis.kt` — wire `CompositeRecommendationEngine(listOf(SdkUpgradeRecommendationSource()))` in place of `NoOpRecommendationEngine`.
+- Test: `src/test/kotlin/buddy/CompositeRecommendationEngineTest.kt` (package `io.sentry.buddy`)
+- Test: `src/test/kotlin/buddy/SdkUpgradeRecommendationSourceTest.kt` (package `io.sentry.buddy`)
 
 ---
 
 ### Task 1: `CompositeRecommendationEngine`
 
 **Files:**
-- Create: `src/main/kotlin/buddy/CompositeRecommendationEngine.kt`
-- Test: `src/test/kotlin/buddy/CompositeRecommendationEngineTest.kt`
+- Create: `src/main/kotlin/buddy/flow/CompositeRecommendationEngine.kt` (package `io.sentry.buddy.flow`)
+- Test: `src/test/kotlin/buddy/CompositeRecommendationEngineTest.kt` (package `io.sentry.buddy`, imports the `flow` types it needs)
 
 **Interfaces:**
 - Consumes: `RecommendationEngine`, `Recommendation`, `FlowAnalysisRequest`, `SentryIssue` (Plan 1).
@@ -56,6 +68,11 @@ plan doc first).
 ```kotlin
 package io.sentry.buddy
 
+import io.sentry.buddy.flow.CompositeRecommendationEngine
+import io.sentry.buddy.flow.FlowAnalysisEvent
+import io.sentry.buddy.flow.FlowAnalysisRequest
+import io.sentry.buddy.flow.Recommendation
+import io.sentry.buddy.flow.RecommendationEngine
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlin.test.Test
@@ -102,7 +119,7 @@ Expected: FAIL — compilation error, `CompositeRecommendationEngine.kt` doesn't
 - [ ] **Step 3: Write the implementation**
 
 ```kotlin
-package io.sentry.buddy
+package io.sentry.buddy.flow
 
 class CompositeRecommendationEngine(
     private val sources: List<RecommendationEngine>
@@ -123,7 +140,7 @@ Expected: PASS (2 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/main/kotlin/buddy/CompositeRecommendationEngine.kt src/test/kotlin/buddy/CompositeRecommendationEngineTest.kt
+git add src/main/kotlin/buddy/flow/CompositeRecommendationEngine.kt src/test/kotlin/buddy/CompositeRecommendationEngineTest.kt
 git commit -m "feat(flow-analysis): add CompositeRecommendationEngine to combine multiple sources"
 ```
 
@@ -132,8 +149,8 @@ git commit -m "feat(flow-analysis): add CompositeRecommendationEngine to combine
 ### Task 2: `SdkUpgradeRecommendationSource`
 
 **Files:**
-- Create: `src/main/kotlin/buddy/SdkUpgradeRecommendationSource.kt`
-- Test: `src/test/kotlin/buddy/SdkUpgradeRecommendationSourceTest.kt`
+- Create: `src/main/kotlin/buddy/util/SdkUpgradeRecommendationSource.kt` (package `io.sentry.buddy.tooling`)
+- Test: `src/test/kotlin/buddy/SdkUpgradeRecommendationSourceTest.kt` (package `io.sentry.buddy`, imports the `flow`/`tooling` types it needs)
 
 **Interfaces:**
 - Consumes: `FlowAnalysisRequest`, `Recommendation`, `Severity`, `RecommendationEngine` (Plan 1).
@@ -155,6 +172,9 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
+import io.sentry.buddy.flow.FlowAnalysisEvent
+import io.sentry.buddy.flow.FlowAnalysisRequest
+import io.sentry.buddy.tooling.SdkUpgradeRecommendationSource
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlin.test.Test
@@ -249,7 +269,7 @@ Expected: FAIL — compilation error, `SdkUpgradeRecommendationSource.kt` doesn'
 - [ ] **Step 3: Write the implementation**
 
 ```kotlin
-package io.sentry.buddy
+package io.sentry.buddy.tooling
 
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -258,6 +278,11 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.serialization.kotlinx.json.json
+import io.sentry.buddy.flow.FlowAnalysisRequest
+import io.sentry.buddy.flow.Recommendation
+import io.sentry.buddy.flow.RecommendationEngine
+import io.sentry.buddy.flow.SentryIssue
+import io.sentry.buddy.flow.Severity
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
@@ -325,7 +350,7 @@ Expected: PASS (7 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/main/kotlin/buddy/SdkUpgradeRecommendationSource.kt src/test/kotlin/buddy/SdkUpgradeRecommendationSourceTest.kt
+git add src/main/kotlin/buddy/util/SdkUpgradeRecommendationSource.kt src/test/kotlin/buddy/SdkUpgradeRecommendationSourceTest.kt
 git commit -m "feat(flow-analysis): add SDK upgrade recommendation source"
 ```
 
@@ -334,17 +359,24 @@ git commit -m "feat(flow-analysis): add SDK upgrade recommendation source"
 ### Task 3: Wire it into `ConfigureFlowAnalysis.kt`
 
 **Files:**
-- Modify: `src/main/kotlin/buddy/ConfigureFlowAnalysis.kt`
+- Modify: `src/main/kotlin/buddy/flow/ConfigureFlowAnalysis.kt` (package `io.sentry.buddy.flow`)
 
 **Interfaces:**
-- Consumes: `CompositeRecommendationEngine` (Task 1), `SdkUpgradeRecommendationSource` (Task 2).
+- Consumes: `CompositeRecommendationEngine` (Task 1, same package — no import needed),
+  `SdkUpgradeRecommendationSource` (Task 2, package `io.sentry.buddy.tooling` — needs an import).
 
 - [ ] **Step 1: Update the `recommendationEngine` wiring**
 
+The current file (after the post-Plan-2 refactor and Plan 2's own wiring) looks like this — add
+one import and one constructor argument, nothing else changes:
+
 ```kotlin
-package io.sentry.buddy
+package io.sentry.buddy.flow
 
 import io.ktor.server.application.Application
+import io.sentry.buddy.tooling.ClaudeCliTitleGenerator
+import io.sentry.buddy.tooling.SdkUpgradeRecommendationSource
+import io.sentry.buddy.tooling.SentryApiClient
 import java.io.File
 
 fun Application.configureFlowAnalysis(
@@ -353,7 +385,8 @@ fun Application.configureFlowAnalysis(
             File(environment.config.propertyOrNull("flowAnalysis.dataDir")?.getString() ?: "data/flow-analysis")
         ),
         issueFetcher = System.getenv("SENTRY_AUTH_TOKEN")
-            ?.let { token -> SentryIssuesClient(authToken = token) }
+            ?.takeIf { it.isNotBlank() }
+            ?.let { token -> SentryApiClient(authToken = token) }
             ?: NoOpIssueFetcher,
         recommendationEngine = CompositeRecommendationEngine(listOf(SdkUpgradeRecommendationSource())),
         titleGenerator = ClaudeCliTitleGenerator()
@@ -397,6 +430,6 @@ Expected: once `status` is `COMPLETED`, `recommendations` contains an "Upgrade S
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/main/kotlin/buddy/ConfigureFlowAnalysis.kt
+git add src/main/kotlin/buddy/flow/ConfigureFlowAnalysis.kt
 git commit -m "feat(flow-analysis): wire the SDK upgrade recommendation source into the pipeline"
 ```
