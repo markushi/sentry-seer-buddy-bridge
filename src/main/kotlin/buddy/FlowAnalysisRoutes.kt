@@ -56,6 +56,7 @@ fun Application.flowAnalysisRoutes(flowAnalysisService: FlowAnalysisService) {
 
 internal fun validateFlowRequest(request: FlowAnalysisRequest): String? = when {
     request.flowId.isBlank() -> "flow_id must not be blank"
+    !request.flowId.matches(Regex("[A-Za-z0-9._-]{1,128}")) -> "flow_id must be alphanumeric with . _ -"
     request.dsn.isBlank() -> "dsn must not be blank"
     request.events.isEmpty() -> "events must not be empty"
     request.startTimeMs > request.endTimeMs -> "start_time_ms must be <= end_time_ms"

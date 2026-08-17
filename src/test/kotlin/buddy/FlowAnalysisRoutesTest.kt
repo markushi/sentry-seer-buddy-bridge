@@ -103,4 +103,19 @@ class FlowAnalysisRoutesTest {
 
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
+
+    @Test
+    fun `POST v1 flow-analysis with path traversal flow_id returns 400`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            flowAnalysisRoutes(newTestService())
+        }
+
+        val response = client.post("/v1/flow-analysis") {
+            contentType(ContentType.Application.Json)
+            setBody(requestJson("../../../etc/passwd"))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
 }
