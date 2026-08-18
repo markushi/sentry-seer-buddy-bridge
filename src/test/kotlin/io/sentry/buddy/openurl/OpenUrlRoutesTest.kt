@@ -44,6 +44,23 @@ class OpenUrlRoutesTest {
     }
 
     @Test
+    fun `POST v1 open-url with a Sentry subdomain returns 200 and opens it`() = testApplication {
+        val launcher = FakeBrowserLauncher()
+        application {
+            install(ContentNegotiation) { json() }
+            openUrlRoutes(launcher)
+        }
+
+        val response = client.post("/v1/open-url") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"url": "https://sentry-sdks.sentry.io/issues/?project=5428559"}""")
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals(URI("https://sentry-sdks.sentry.io/issues/?project=5428559"), launcher.openedUri)
+    }
+
+    @Test
     fun `POST v1 open-url with a disallowed host returns 400 and does not open it`() = testApplication {
         val launcher = FakeBrowserLauncher()
         application {
