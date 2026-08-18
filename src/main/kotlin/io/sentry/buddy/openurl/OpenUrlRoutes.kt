@@ -18,11 +18,17 @@ fun Application.openUrlRoutes(browserLauncher: BrowserLauncher) {
                 return@post
             }
 
+            var opened = false
             try {
                 browserLauncher.open(URI(request.url))
-                call.respond(HttpStatusCode.OK)
+                opened = true
             } catch (e: Exception) {
+                call.application.log.warn("failed to open url", e)
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "failed to open url"))
+            }
+
+            if (opened) {
+                call.respond(HttpStatusCode.OK)
             }
         }
     }

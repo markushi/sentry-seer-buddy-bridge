@@ -39,4 +39,25 @@ class OpenUrlValidatorTest {
     fun `rejects a malformed url`() {
         assertEquals("url is malformed", validateOpenUrl("not a url"))
     }
+
+    @Test
+    fun `accepts a case-insensitive scheme and host`() {
+        assertNull(validateOpenUrl("https://Sentry.IO/organizations/acme/issues/123/"))
+    }
+
+    @Test
+    fun `rejects a userinfo trick where getHost returns evil_com`() {
+        assertEquals(
+            "url host must be sentry.io",
+            validateOpenUrl("https://sentry.io@evil.com/x")
+        )
+    }
+
+    @Test
+    fun `rejects an underscore host that parses to a null host`() {
+        assertEquals(
+            "url host must be sentry.io",
+            validateOpenUrl("https://sentry.io_evil.com/x")
+        )
+    }
 }

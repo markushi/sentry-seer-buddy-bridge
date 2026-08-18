@@ -12,8 +12,8 @@ fun validateOpenUrl(url: String): String? {
         return "url is malformed"
     }
 
-    if (uri.scheme != "https") return "url must use https"
-    if (uri.host != ALLOWED_HOST) return "url host must be $ALLOWED_HOST"
+    if (!uri.scheme.equals("https", ignoreCase = true)) return "url must use https"
+    if (!ALLOWED_HOST.equals(uri.host, ignoreCase = true)) return "url host must be $ALLOWED_HOST"
 
     return null
 }

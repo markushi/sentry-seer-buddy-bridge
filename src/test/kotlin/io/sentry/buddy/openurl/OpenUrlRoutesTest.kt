@@ -76,5 +76,7 @@ class OpenUrlRoutesTest {
         }
 
         assertEquals(HttpStatusCode.InternalServerError, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText())
+        assertEquals("\"failed to open url\"", body.jsonObject["error"].toString())
     }
 }
