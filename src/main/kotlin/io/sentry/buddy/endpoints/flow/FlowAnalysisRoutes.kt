@@ -74,8 +74,7 @@ internal fun validateFlowId(flowId: String): String? = when {
     else -> null
 }
 
-internal fun validateFlowRequest(request: FlowAnalysisRequest): String? = when {
-    validateFlowId(request.flowId) != null -> validateFlowId(request.flowId)
+internal fun validateFlowRequest(request: FlowAnalysisRequest): String? = validateFlowId(request.flowId) ?: when {
     request.dsn.isBlank() -> "dsn must not be blank"
     request.events.isEmpty() -> "events must not be empty"
     request.startTimeMs > request.endTimeMs -> "start_time_ms must be <= end_time_ms"
