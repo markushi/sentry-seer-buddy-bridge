@@ -1,5 +1,11 @@
 package io.sentry.buddy.flow
 
+import io.sentry.buddy.AnalysisStatus
+import io.sentry.buddy.FlowAnalysisEvent
+import io.sentry.buddy.FlowAnalysisRequest
+import io.sentry.buddy.FlowAnalysisResponse
+import io.sentry.buddy.Recommendation
+import io.sentry.buddy.RecommendationStatus
 import io.sentry.buddy.enrichment.Enrichment
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -57,15 +63,33 @@ class FlowAnalysisServiceTest {
     }
 
     @Test
-    fun `pipeline failure marks the flow as FAILED with the error message`() {
-        val service = newService(enrichments = listOf(Enrichment { _, _ -> throw IllegalStateException("boom") }))
+    fun `a failing enrichment is recorded as an enrichment error but does not fail the flow`() {
+        val service = newService(
+            enrichments = listOf(
+                Enrichment { _, _ -> throw IllegalStateException("boom") },
+                Enrichment { _, response -> response.copy(title = "Recovered") }
+            )
+        )
 
         service.submitOrGetExisting(sampleRequest())
 
         val result = service.get("flow-1")
         assertNotNull(result)
-        assertEquals(AnalysisStatus.FAILED, result.status)
-        assertEquals("boom", result.error)
+        assertEquals(AnalysisStatus.COMPLETED, result.status)
+        assertEquals("Recovered", result.title)
+        assertEquals(1, result.enrichmentErrors.size)
+        assertTrue(result.enrichmentErrors.single().contains("boom"))
+    }
+
+    @Test
+    fun `successful enrichments leave enrichmentErrors empty`() {
+        val service = newService()
+
+        service.submitOrGetExisting(sampleRequest())
+
+        val result = service.get("flow-1")
+        assertNotNull(result)
+        assertEquals(emptyList(), result.enrichmentErrors)
     }
 
     @Test

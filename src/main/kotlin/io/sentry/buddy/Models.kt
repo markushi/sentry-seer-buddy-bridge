@@ -1,4 +1,4 @@
-package io.sentry.buddy.flow
+package io.sentry.buddy
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -57,5 +57,6 @@ data class FlowAnalysisResponse(
     val title: String? = null,
     val recommendations: List<Recommendation> = emptyList(),
     val issues: List<SentryIssue> = emptyList(),
-    val error: String? = null
+    val error: String? = null,
+    @SerialName("enrichment_errors") val enrichmentErrors: List<String> = emptyList()
 )

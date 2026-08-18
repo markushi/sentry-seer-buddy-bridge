@@ -5,10 +5,10 @@ import io.ktor.client.engine.mock.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
-import io.sentry.buddy.flow.AnalysisStatus
-import io.sentry.buddy.flow.FlowAnalysisEvent
-import io.sentry.buddy.flow.FlowAnalysisRequest
-import io.sentry.buddy.flow.FlowAnalysisResponse
+import io.sentry.buddy.AnalysisStatus
+import io.sentry.buddy.FlowAnalysisEvent
+import io.sentry.buddy.FlowAnalysisRequest
+import io.sentry.buddy.FlowAnalysisResponse
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlin.test.Test

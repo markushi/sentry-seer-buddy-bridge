@@ -1,10 +1,10 @@
-package io.sentry.buddy.flow
+package io.sentry.buddy
 
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class FlowAnalysisModelsTest {
+class ModelsTest {
 
     @Test
     fun `FlowAnalysisRequest round-trips through snake_case JSON keys`() {
@@ -31,8 +31,8 @@ class FlowAnalysisModelsTest {
         assertEquals("tapped checkout twice", request.userAnnotation)
         assertEquals("click", request.events.single().type)
 
-        val reencoded = Json.encodeToString(FlowAnalysisRequest.serializer(), request)
-        val roundTripped = Json.decodeFromString(FlowAnalysisRequest.serializer(), reencoded)
+        val reencoded = Json.Default.encodeToString(FlowAnalysisRequest.serializer(), request)
+        val roundTripped = Json.Default.decodeFromString(FlowAnalysisRequest.serializer(), reencoded)
         assertEquals(request, roundTripped)
     }
 
@@ -42,5 +42,6 @@ class FlowAnalysisModelsTest {
 
         assertEquals(emptyList(), response.recommendations)
         assertEquals(emptyList(), response.issues)
+        assertEquals(emptyList(), response.enrichmentErrors)
     }
 }

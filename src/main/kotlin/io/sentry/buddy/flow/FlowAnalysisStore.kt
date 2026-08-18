@@ -1,5 +1,7 @@
 package io.sentry.buddy.flow
 
+import io.sentry.buddy.FlowAnalysisRequest
+import io.sentry.buddy.FlowAnalysisResponse
 import kotlinx.serialization.json.Json
 import java.io.File
 

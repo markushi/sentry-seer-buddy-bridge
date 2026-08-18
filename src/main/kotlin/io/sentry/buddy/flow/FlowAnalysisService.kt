@@ -1,10 +1,15 @@
 package io.sentry.buddy.flow
 
+import io.sentry.buddy.AnalysisStatus
+import io.sentry.buddy.FlowAnalysisRequest
+import io.sentry.buddy.FlowAnalysisResponse
+import io.sentry.buddy.RecommendationStatus
 import io.sentry.buddy.enrichment.Enrichment
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import org.slf4j.LoggerFactory
 
 sealed class ResolveOutcome {
     data class Success(val response: FlowAnalysisResponse) : ResolveOutcome()
@@ -18,6 +23,8 @@ class FlowAnalysisService(
     private val enrichments: List<Enrichment> = emptyList(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 ) {
+
+    private val logger = LoggerFactory.getLogger(FlowAnalysisService::class.java)
 
     fun submitOrGetExisting(request: FlowAnalysisRequest): FlowAnalysisResponse {
         store.loadResult(request.flowId)?.let { return it }
@@ -50,9 +57,18 @@ class FlowAnalysisService(
 
     private suspend fun runPipeline(request: FlowAnalysisRequest) {
         val result = try {
-            val initial = FlowAnalysisResponse(flowId = request.flowId, status = AnalysisStatus.PROCESSING)
-            val enriched = enrichments.fold(initial) { response, enrichment -> enrichment.enrich(request, response) }
-            enriched.copy(status = AnalysisStatus.COMPLETED)
+            val errors = mutableListOf<String>()
+            var response = FlowAnalysisResponse(flowId = request.flowId, status = AnalysisStatus.PROCESSING)
+            for (enrichment in enrichments) {
+                response = try {
+                    enrichment.enrich(request, response)
+                } catch (e: Exception) {
+                    logger.warn("Enrichment ${enrichment::class.simpleName} failed for flow ${request.flowId}", e)
+                    errors += "${enrichment::class.simpleName}: ${e.message ?: "unknown error"}"
+                    response
+                }
+            }
+            response.copy(status = AnalysisStatus.COMPLETED, enrichmentErrors = errors)
         } catch (e: Exception) {
             FlowAnalysisResponse(
                 flowId = request.flowId,

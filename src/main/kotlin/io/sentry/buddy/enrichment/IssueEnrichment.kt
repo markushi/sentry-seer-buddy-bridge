@@ -6,9 +6,9 @@ import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.serialization.kotlinx.json.*
-import io.sentry.buddy.flow.FlowAnalysisRequest
-import io.sentry.buddy.flow.FlowAnalysisResponse
-import io.sentry.buddy.flow.SentryIssue
+import io.sentry.buddy.FlowAnalysisRequest
+import io.sentry.buddy.FlowAnalysisResponse
+import io.sentry.buddy.SentryIssue
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
