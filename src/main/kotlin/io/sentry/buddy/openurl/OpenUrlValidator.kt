@@ -14,7 +14,7 @@ fun validateOpenUrl(url: String): String? {
 
     if (!uri.scheme.equals("https", ignoreCase = true)) return "url must use https"
     val host = uri.host?.lowercase()
-    if (host != ALLOWED_HOST && host?.endsWith(".$ALLOWED_HOST") != true) {
+    if (host != ALLOWED_HOST) {
         return "url host must be $ALLOWED_HOST"
     }
 
