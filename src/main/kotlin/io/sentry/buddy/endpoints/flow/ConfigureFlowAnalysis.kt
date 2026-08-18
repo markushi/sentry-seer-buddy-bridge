@@ -8,30 +8,33 @@ import io.sentry.buddy.enrichment.TitleEnrichment
 import io.sentry.buddy.seer.SeerClient
 import java.io.File
 
+private fun env(name: String): String? = System.getenv(name)?.takeIf { it.isNotBlank() }
+
 fun Application.configureFlowAnalysis(
-    flowAnalysisService: FlowAnalysisService = FlowAnalysisService(
-        store = FlowAnalysisStore(
-            File(environment.config.propertyOrNull("flowAnalysis.dataDir")?.getString() ?: "data/flow-analysis")
-        ),
-        enrichments = buildList {
-            val token = System.getenv("SENTRY_AUTH_TOKEN")?.takeIf { it.isNotBlank() }
-            val org = System.getenv("SENTRY_ORG")?.takeIf { it.isNotBlank() }
-            if (token != null) add(IssueEnrichment(authToken = token))
-            if (token != null && org != null) {
-                add(
-                    SeerRecommendationEnrichment(
-                        SeerClient(
-                            authToken = token,
-                            org = org,
-                            projectId = System.getenv("SENTRY_PROJECT_ID")?.takeIf { it.isNotBlank() }
-                        )
-                    )
-                )
-            }
-            add(SdkUpgradeEnrichment())
-            add(TitleEnrichment())
-        }
+    flowAnalysisService: FlowAnalysisService = defaultFlowAnalysisService(
+        File(environment.config.propertyOrNull("flowAnalysis.dataDir")?.getString() ?: "data/flow-analysis")
     )
 ) {
     flowAnalysisRoutes(flowAnalysisService)
+}
+
+private fun defaultFlowAnalysisService(dataDir: File): FlowAnalysisService {
+    val authToken = env("SENTRY_AUTH_TOKEN")
+    val org = env("SENTRY_ORG")
+    val seerClient = if (authToken != null && org != null) {
+        SeerClient(authToken = authToken, org = org, projectId = env("SENTRY_PROJECT_ID"))
+    } else {
+        null
+    }
+
+    return FlowAnalysisService(
+        store = FlowAnalysisStore(dataDir),
+        enrichments = buildList {
+            if (authToken != null) add(IssueEnrichment(authToken = authToken))
+            if (seerClient != null) add(SeerRecommendationEnrichment(seerClient))
+            add(SdkUpgradeEnrichment())
+            add(TitleEnrichment())
+        },
+        seerClient = seerClient
+    )
 }
