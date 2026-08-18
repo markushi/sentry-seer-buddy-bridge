@@ -101,6 +101,59 @@ class SeerRecommendationEnrichmentTest {
     }
 
     @Test
+    fun `parseRecommendations takes the fenced block even when the prose has a stray bracket`() {
+        val output = """
+            First, [1] the checkout is slow. Here is the answer:
+
+            ```json
+            [{"title": "T", "description": "D", "severity": "LOW"}]
+            ```
+
+            I hope that helps [see above].
+        """.trimIndent()
+
+        val recommendations = parseRecommendations(output, json)
+
+        assertEquals(1, recommendations.size)
+        assertEquals("T", recommendations.single().title)
+    }
+
+    @Test
+    fun `parseRecommendations keeps the elements that decode and skips the ones that do not`() {
+        val output = """
+            [
+              {"title": "Good one", "description": "D", "severity": "HIGH"},
+              {"description": "no title at all"},
+              {"title": "Second good one", "description": "D"}
+            ]
+        """.trimIndent()
+
+        val recommendations = parseRecommendations(output, json)
+
+        assertEquals(listOf("Good one", "Second good one"), recommendations.map { it.title })
+    }
+
+    @Test
+    fun `parseRecommendations reads a severity case-insensitively and falls back to MEDIUM`() {
+        val output = """
+            [
+              {"title": "A", "description": "D", "severity": "high"},
+              {"title": "B", "description": "D", "severity": "catastrophic"}
+            ]
+        """.trimIndent()
+
+        val recommendations = parseRecommendations(output, json)
+
+        assertEquals(Severity.HIGH, recommendations[0].severity)
+        assertEquals(Severity.MEDIUM, recommendations[1].severity)
+    }
+
+    @Test
+    fun `parseRecommendations throws when no element of the array can be decoded`() {
+        assertFailsWith<IllegalStateException> { parseRecommendations("""[{"nonsense": 1}]""", json) }
+    }
+
+    @Test
     fun `parseRecommendations returns an empty list for an empty array`() {
         assertEquals(emptyList(), parseRecommendations("[]", json))
     }

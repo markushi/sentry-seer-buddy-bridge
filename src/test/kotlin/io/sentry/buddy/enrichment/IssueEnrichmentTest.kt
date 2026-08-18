@@ -9,10 +9,12 @@ import io.sentry.buddy.AnalysisStatus
 import io.sentry.buddy.FlowAnalysisEvent
 import io.sentry.buddy.FlowAnalysisRequest
 import io.sentry.buddy.FlowAnalysisResponse
+import io.sentry.buddy.seer.seerJson
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 
 class IssueEnrichmentTest {
 
@@ -81,6 +83,22 @@ class IssueEnrichmentTest {
         val issues = enrichment.fetchIssues(sampleRequest(dsn = "not a uri"))
 
         assertEquals(emptyList(), issues)
+    }
+
+    @Test
+    fun `enrich throws when the events request fails, so the service records an enrichment error`() = runBlocking {
+        val mockEngine = MockEngine { _ ->
+            respond(
+                content = """{"detail": "You do not have permission to perform this action."}""",
+                status = HttpStatusCode.Forbidden,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val httpClient = HttpClient(mockEngine) { install(ContentNegotiation) { json(seerJson) } }
+        val enrichment = IssueEnrichment(authToken = "token", httpClient = httpClient)
+
+        assertFails { enrichment.enrich(sampleRequest(), emptyResponse()) }
+        Unit
     }
 
     @Test
