@@ -6,6 +6,9 @@ import io.sentry.buddy.FlowAnalysisRequest
 import io.sentry.buddy.FlowAnalysisResponse
 import io.sentry.buddy.Recommendation
 import io.sentry.buddy.RecommendationStatus
+import io.sentry.buddy.endpoints.flow.FlowAnalysisService
+import io.sentry.buddy.endpoints.flow.FlowAnalysisStore
+import io.sentry.buddy.endpoints.flow.ResolveOutcome
 import io.sentry.buddy.enrichment.Enrichment
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

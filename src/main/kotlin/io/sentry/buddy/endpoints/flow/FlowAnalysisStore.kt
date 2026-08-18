@@ -1,4 +1,4 @@
-package io.sentry.buddy.flow
+package io.sentry.buddy.endpoints.flow
 
 import io.sentry.buddy.FlowAnalysisRequest
 import io.sentry.buddy.FlowAnalysisResponse

@@ -1,5 +1,6 @@
 package io.sentry.buddy.openurl
 
+import io.sentry.buddy.endpoints.openurl.validateOpenUrl
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

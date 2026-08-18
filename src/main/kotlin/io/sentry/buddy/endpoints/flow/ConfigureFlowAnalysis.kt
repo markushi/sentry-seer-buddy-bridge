@@ -1,4 +1,4 @@
-package io.sentry.buddy.flow
+package io.sentry.buddy.endpoints.flow
 
 import io.ktor.server.application.*
 import io.sentry.buddy.enrichment.IssueEnrichment

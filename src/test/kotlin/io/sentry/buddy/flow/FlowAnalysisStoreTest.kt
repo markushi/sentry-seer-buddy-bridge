@@ -4,6 +4,7 @@ import io.sentry.buddy.AnalysisStatus
 import io.sentry.buddy.FlowAnalysisEvent
 import io.sentry.buddy.FlowAnalysisRequest
 import io.sentry.buddy.FlowAnalysisResponse
+import io.sentry.buddy.endpoints.flow.FlowAnalysisStore
 import kotlinx.serialization.json.JsonObject
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
