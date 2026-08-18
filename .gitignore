@@ -3,3 +3,11 @@ build/
 data/
 
 .DS_STORE
+
+# Local secrets: SENTRY_AUTH_TOKEN and the other Seer variables
+.env
+.env.*
+!.env.example
+
+# Scratch space of the superpowers subagent workflow
+.superpowers/
