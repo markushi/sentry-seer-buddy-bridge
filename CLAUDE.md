@@ -4,8 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A Ktor (Kotlin) server generated via the Ktor Project Generator (start.ktor.io). Currently a minimal
-skeleton: content negotiation + kotlinx.serialization plugins and two demo routes.
+A Ktor (Kotlin) server meant as a bridge between an app and sentry services.
 
 ## Commands
 
@@ -14,21 +13,18 @@ skeleton: content negotiation + kotlinx.serialization plugins and two demo route
 - `./gradlew test --tests "io.sentry.ServerTest.test root endpoint"` — run a single test
 - `./gradlew build` — full build (compile + test)
 
-## Rules
+## Basic Coding Rules
 
-- Keep the implementation minimal.
-- Do not build features nobody requested.
+- Use the superpowers skill set for development: https://github.com/obra/superpowers
+- Keep the implementation minimal
+- Do not build features nobody requested
+- Write meaningful tests
 
 ## Architecture
 
 Ktor apps wire up via **application modules** referenced by fully-qualified function name in
 `src/main/resources/application.yaml` (`ktor.application.modules`), not via a central routing table
-in code. Each module is an `Application.() -> Unit` extension function:
-
-- `Serialization.kt` — `configureSerialization()` installs the `ContentNegotiation` plugin (JSON).
-- `Routing.kt` — `configureRouting()` defines all HTTP routes inside `routing { ... }`.
-- `main.kt` — entry point delegates to `io.ktor.server.netty.EngineMain`, which reads
-  `application.yaml` and invokes the configured modules in order.
+in code.
 
 To add a new concern (e.g. auth, DB), create a new `ConfigureX.kt` file with an `Application.configureX()`
 function and register it in `application.yaml` under `ktor.application.modules`, following the existing
