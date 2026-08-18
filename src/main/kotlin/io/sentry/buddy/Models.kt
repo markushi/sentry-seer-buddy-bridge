@@ -37,7 +37,8 @@ data class Recommendation(
     val link: String? = null,
     val severity: Severity = Severity.MEDIUM,
     val resolvable: Boolean = true,
-    val status: RecommendationStatus = RecommendationStatus.OPEN
+    val status: RecommendationStatus = RecommendationStatus.OPEN,
+    @SerialName("seer_run_url") val seerRunUrl: String? = null
 )
 
 @Serializable

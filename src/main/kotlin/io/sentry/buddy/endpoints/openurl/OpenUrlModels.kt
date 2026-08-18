@@ -1,4 +1,4 @@
-package io.sentry.buddy.openurl
+package io.sentry.buddy.endpoints.openurl
 
 import kotlinx.serialization.Serializable
 

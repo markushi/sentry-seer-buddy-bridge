@@ -7,6 +7,8 @@ import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.testing.*
+import io.sentry.buddy.endpoints.openurl.BrowserLauncher
+import io.sentry.buddy.endpoints.openurl.openUrlRoutes
 import java.net.URI
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject

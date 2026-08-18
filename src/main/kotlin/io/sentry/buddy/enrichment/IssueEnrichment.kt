@@ -9,9 +9,9 @@ import io.ktor.serialization.kotlinx.json.*
 import io.sentry.buddy.FlowAnalysisRequest
 import io.sentry.buddy.FlowAnalysisResponse
 import io.sentry.buddy.SentryIssue
+import io.sentry.buddy.seer.seerJson
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import org.slf4j.LoggerFactory
 import java.net.URI
 
 @Serializable
@@ -26,26 +26,22 @@ private data class SentryEventDto(
 
 class IssueEnrichment(
     private val authToken: String,
-    private val httpClient: HttpClient = HttpClient(CIO) { install(ContentNegotiation) { json() } },
+    private val httpClient: HttpClient = HttpClient(CIO) { install(ContentNegotiation) { json(seerJson) } },
     private val baseUrl: String = "https://sentry.io"
 ) : Enrichment {
-
-    private val logger = LoggerFactory.getLogger(IssueEnrichment::class.java)
 
     override suspend fun enrich(request: FlowAnalysisRequest, response: FlowAnalysisResponse): FlowAnalysisResponse =
         response.copy(issues = fetchIssues(request))
 
+    /**
+     * A failure is not swallowed: it reaches `FlowAnalysisService`, which records it in
+     * `enrichment_errors`. Only a DSN without an organization gives a quiet empty list, because
+     * that is a configuration fact and not a failure.
+     */
     internal suspend fun fetchIssues(request: FlowAnalysisRequest): List<SentryIssue> {
         val org = organizationSlugFrom(request.dsn) ?: return emptyList()
 
-        val events = try {
-            request.traceIds.flatMap { traceId -> fetchEventsForTrace(org, traceId) }
-        } catch (e: Exception) {
-            logger.warn("Failed to fetch Sentry issues for org $org", e)
-            return emptyList()
-        }
-
-        return events
+        return request.traceIds.flatMap { traceId -> fetchEventsForTrace(org, traceId) }
             .groupBy { it.groupId ?: it.id }
             .values
             .map { toIssue(it) }
@@ -78,12 +74,12 @@ class IssueEnrichment(
         "info" -> 1
         else -> 0
     }
+}
 
-    internal fun organizationSlugFrom(dsn: String): String? = try {
-        URI(dsn).host?.substringBefore(".")?.ifBlank { null }?.let { prefix ->
-            Regex("^o(\\d+)$").matchEntire(prefix)?.groupValues?.get(1) ?: prefix
-        }
-    } catch (e: Exception) {
-        null
+internal fun organizationSlugFrom(dsn: String): String? = try {
+    URI(dsn).host?.substringBefore(".")?.ifBlank { null }?.let { prefix ->
+        Regex("^o(\\d+)$").matchEntire(prefix)?.groupValues?.get(1) ?: prefix
     }
+} catch (e: Exception) {
+    null
 }

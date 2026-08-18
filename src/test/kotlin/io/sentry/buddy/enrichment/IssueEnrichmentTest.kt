@@ -9,10 +9,12 @@ import io.sentry.buddy.AnalysisStatus
 import io.sentry.buddy.FlowAnalysisEvent
 import io.sentry.buddy.FlowAnalysisRequest
 import io.sentry.buddy.FlowAnalysisResponse
+import io.sentry.buddy.seer.seerJson
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 
 class IssueEnrichmentTest {
 
@@ -31,23 +33,17 @@ class IssueEnrichmentTest {
 
     @Test
     fun `organizationSlugFrom extracts the org from a standard ingest DSN`() {
-        val enrichment = IssueEnrichment(authToken = "token")
-
-        assertEquals("123", enrichment.organizationSlugFrom("https://examplekey@o123.ingest.sentry.io/456"))
+        assertEquals("123", organizationSlugFrom("https://examplekey@o123.ingest.sentry.io/456"))
     }
 
     @Test
     fun `organizationSlugFrom strips the leading o from a numeric ingest-host org id`() {
-        val enrichment = IssueEnrichment(authToken = "token")
-
-        assertEquals("447951", enrichment.organizationSlugFrom("https://examplekey@o447951.ingest.sentry.io/456"))
+        assertEquals("447951", organizationSlugFrom("https://examplekey@o447951.ingest.sentry.io/456"))
     }
 
     @Test
     fun `organizationSlugFrom returns null for an unparseable dsn`() {
-        val enrichment = IssueEnrichment(authToken = "token")
-
-        assertEquals(null, enrichment.organizationSlugFrom("not a uri"))
+        assertEquals(null, organizationSlugFrom("not a uri"))
     }
 
     @Test
@@ -87,6 +83,22 @@ class IssueEnrichmentTest {
         val issues = enrichment.fetchIssues(sampleRequest(dsn = "not a uri"))
 
         assertEquals(emptyList(), issues)
+    }
+
+    @Test
+    fun `enrich throws when the events request fails, so the service records an enrichment error`() = runBlocking {
+        val mockEngine = MockEngine { _ ->
+            respond(
+                content = """{"detail": "You do not have permission to perform this action."}""",
+                status = HttpStatusCode.Forbidden,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val httpClient = HttpClient(mockEngine) { install(ContentNegotiation) { json(seerJson) } }
+        val enrichment = IssueEnrichment(authToken = "token", httpClient = httpClient)
+
+        assertFails { enrichment.enrich(sampleRequest(), emptyResponse()) }
+        Unit
     }
 
     @Test
