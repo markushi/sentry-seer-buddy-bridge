@@ -31,23 +31,17 @@ class IssueEnrichmentTest {
 
     @Test
     fun `organizationSlugFrom extracts the org from a standard ingest DSN`() {
-        val enrichment = IssueEnrichment(authToken = "token")
-
-        assertEquals("123", enrichment.organizationSlugFrom("https://examplekey@o123.ingest.sentry.io/456"))
+        assertEquals("123", organizationSlugFrom("https://examplekey@o123.ingest.sentry.io/456"))
     }
 
     @Test
     fun `organizationSlugFrom strips the leading o from a numeric ingest-host org id`() {
-        val enrichment = IssueEnrichment(authToken = "token")
-
-        assertEquals("447951", enrichment.organizationSlugFrom("https://examplekey@o447951.ingest.sentry.io/456"))
+        assertEquals("447951", organizationSlugFrom("https://examplekey@o447951.ingest.sentry.io/456"))
     }
 
     @Test
     fun `organizationSlugFrom returns null for an unparseable dsn`() {
-        val enrichment = IssueEnrichment(authToken = "token")
-
-        assertEquals(null, enrichment.organizationSlugFrom("not a uri"))
+        assertEquals(null, organizationSlugFrom("not a uri"))
     }
 
     @Test
