@@ -5,6 +5,7 @@ ktor:
     modules:
       - io.sentry.buddy.SerializationKt.configureSerialization
       - io.sentry.buddy.flow.ConfigureFlowAnalysisKt.configureFlowAnalysis
+      - io.sentry.buddy.healthcheck.ConfigureHealthCheckKt.configureHealthCheck
       - io.sentry.buddy.openurl.ConfigureOpenUrlKt.configureOpenUrl
 
 flowAnalysis:

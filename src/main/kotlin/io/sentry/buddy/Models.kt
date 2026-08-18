@@ -60,3 +60,62 @@ data class FlowAnalysisResponse(
     val error: String? = null,
     @SerialName("enrichment_errors") val enrichmentErrors: List<String> = emptyList()
 )
+
+@Serializable
+data class HealthCheckConfigSnapshot(
+    val dsnConfigured: Boolean = false,
+    val release: String? = null,
+    val environment: String? = null,
+    val dist: String? = null,
+    val sampleRate: Double? = null,
+    val tracesSampleRate: Double? = null,
+    val hasTracesSampler: Boolean = false,
+    val profilesSampleRate: Double? = null,
+    val profilingEnabled: Boolean = false,
+    val autoSessionTrackingEnabled: Boolean = false,
+    val attachStacktrace: Boolean = false,
+    val beforeSendConfigured: Boolean = false,
+    val beforeSendTransactionConfigured: Boolean = false,
+    val beforeBreadcrumbConfigured: Boolean = false,
+    val sessionReplaySampleRate: Double? = null,
+    val sessionReplayOnErrorSampleRate: Double? = null,
+    val sessionReplayEnabled: Boolean = false,
+    val sessionReplayOnErrorEnabled: Boolean = false,
+    val sessionReplayMaskAllText: Boolean = true,
+    val sessionReplayMaskAllImages: Boolean = true,
+    val anrEnabled: Boolean? = null,
+    val attachScreenshot: Boolean? = null,
+    val attachViewHierarchy: Boolean? = null,
+    val autoActivityLifecycleTracingEnabled: Boolean? = null,
+    val activityLifecycleBreadcrumbsEnabled: Boolean? = null,
+    val appLifecycleBreadcrumbsEnabled: Boolean? = null,
+    val networkEventBreadcrumbsEnabled: Boolean? = null,
+    val framesTrackingEnabled: Boolean? = null,
+    val performanceV2Enabled: Boolean? = null,
+    val ndkEnabled: Boolean? = null,
+    val reportHistoricalAnrs: Boolean? = null,
+    val attachAnrThreadDump: Boolean? = null,
+)
+
+@Serializable
+data class HealthCheckRequest(
+    val sdk: String,
+    val config: HealthCheckConfigSnapshot = HealthCheckConfigSnapshot(),
+)
+
+@Serializable
+data class HealthCheckFinding(
+    val id: String,
+    val title: String,
+    val description: String,
+    val severity: Severity,
+    val currentValue: String? = null,
+    val suggestedValue: String? = null,
+    val link: String? = null,
+)
+
+@Serializable
+data class HealthCheckResponse(
+    val summary: String,
+    val findings: List<HealthCheckFinding> = emptyList(),
+)
