@@ -13,6 +13,8 @@ import io.sentry.buddy.flow.AnalysisStatus
 import io.sentry.buddy.flow.FlowAnalysisEvent
 import io.sentry.buddy.flow.FlowAnalysisRequest
 import io.sentry.buddy.flow.FlowAnalysisResponse
+import io.sentry.buddy.flow.Recommendation
+import io.sentry.buddy.flow.Severity
 import io.sentry.buddy.tooling.SdkUpgradeEnrichment
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
@@ -95,8 +97,18 @@ class SdkUpgradeEnrichmentTest {
     fun `enrich preserves recommendations already on the response`() = runBlocking {
         val enrichment = SdkUpgradeEnrichment(httpClient = mockClient("8.40.0"))
 
-        val enriched = enrichment.enrich(sampleRequest("io.sentry.android@8.40.0"), emptyResponse())
+        val existingRecommendation = Recommendation(
+            id = "existing-rec",
+            title = "Existing recommendation",
+            description = "This was added by a previous enrichment",
+            link = "https://example.com",
+            severity = Severity.LOW
+        )
+        val responseWithRecommendation = emptyResponse().copy(recommendations = listOf(existingRecommendation))
 
-        assertEquals(emptyList(), enriched.recommendations)
+        val enriched = enrichment.enrich(sampleRequest("io.sentry.android@8.40.0"), responseWithRecommendation)
+
+        assertEquals(1, enriched.recommendations.size)
+        assertEquals("Existing recommendation", enriched.recommendations.single().title)
     }
 }
