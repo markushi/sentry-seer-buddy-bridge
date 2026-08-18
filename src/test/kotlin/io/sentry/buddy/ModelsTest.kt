@@ -1,6 +1,5 @@
 package io.sentry.buddy
 
-import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -24,7 +23,7 @@ class ModelsTest {
             }
         """.trimIndent()
 
-        val request = Json.decodeFromString(FlowAnalysisRequest.serializer(), json)
+        val request = appJson.decodeFromString(FlowAnalysisRequest.serializer(), json)
 
         assertEquals("flow-1", request.flowId)
         assertEquals(listOf("trace-1", "trace-2"), request.traceIds)
@@ -32,8 +31,8 @@ class ModelsTest {
         assertEquals("tapped checkout twice", request.userAnnotation)
         assertEquals("click", request.events.single().type)
 
-        val reencoded = Json.Default.encodeToString(FlowAnalysisRequest.serializer(), request)
-        val roundTripped = Json.Default.decodeFromString(FlowAnalysisRequest.serializer(), reencoded)
+        val reencoded = appJson.encodeToString(FlowAnalysisRequest.serializer(), request)
+        val roundTripped = appJson.decodeFromString(FlowAnalysisRequest.serializer(), reencoded)
         assertEquals(request, roundTripped)
     }
 
@@ -47,20 +46,21 @@ class ModelsTest {
     }
 
     @Test
-    fun `a recommendation without a seer run url leaves the field out of the JSON`() {
-        val json = Json { encodeDefaults = false }
-
-        val encoded = json.encodeToString(
+    fun `the api encodes the defaults of a recommendation, including a null seer_run_url`() {
+        val encoded = appJson.encodeToString(
             Recommendation.serializer(),
             Recommendation(id = "rec-1", title = "T", description = "D")
         )
 
-        assertTrue(!encoded.contains("seer_run_url"), "expected no seer_run_url in $encoded")
+        assertTrue(encoded.contains("\"status\":\"OPEN\""), "expected the status in $encoded")
+        assertTrue(encoded.contains("\"severity\":\"MEDIUM\""), "expected the severity in $encoded")
+        assertTrue(encoded.contains("\"resolvable\":true"), "expected resolvable in $encoded")
+        assertTrue(encoded.contains("\"seer_run_url\":null"), "expected a null seer_run_url in $encoded")
     }
 
     @Test
     fun `a recommendation encodes and decodes its seer run url as seer_run_url`() {
-        val json = Json { ignoreUnknownKeys = true }
+        val json = appJson
         val url = "https://sentry-sdks.sentry.io/issues/?project=1&statsPeriod=10m&explorerRunId=uuid"
 
         val encoded = json.encodeToString(

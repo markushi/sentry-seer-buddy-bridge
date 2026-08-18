@@ -1,5 +1,8 @@
 package io.sentry.buddy.flow
 
+import io.ktor.client.*
+import io.ktor.client.engine.mock.*
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation as ClientContentNegotiation
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -8,15 +11,21 @@ import io.ktor.server.application.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.testing.*
 import io.sentry.buddy.AnalysisStatus
+import io.sentry.buddy.FlowAnalysisEvent
+import io.sentry.buddy.FlowAnalysisRequest
 import io.sentry.buddy.FlowAnalysisResponse
 import io.sentry.buddy.Recommendation
+import io.sentry.buddy.RecommendationStatus
 import io.sentry.buddy.endpoints.flow.FlowAnalysisService
 import io.sentry.buddy.endpoints.flow.FlowAnalysisStore
 import io.sentry.buddy.endpoints.flow.flowAnalysisRoutes
 import io.sentry.buddy.enrichment.Enrichment
+import io.sentry.buddy.seer.SeerClient
+import io.sentry.buddy.seer.seerJson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
@@ -37,8 +46,10 @@ class FlowAnalysisRoutesTest {
         }
     """.trimIndent()
 
-    private fun newTestService() = FlowAnalysisService(
-        store = FlowAnalysisStore(createTempDirectory("flow-routes-test").toFile()),
+    private fun newTestService(
+        store: FlowAnalysisStore = FlowAnalysisStore(createTempDirectory("flow-routes-test").toFile())
+    ) = FlowAnalysisService(
+        store = store,
         enrichments = listOf(Enrichment { _, response -> response.copy(title = "Test title") }),
         scope = CoroutineScope(Dispatchers.Unconfined)
     )
@@ -120,6 +131,84 @@ class FlowAnalysisRoutesTest {
         }
 
         assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `GET v1 flow-analysis with a path traversal id returns 400`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            flowAnalysisRoutes(newTestService())
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, client.get("/v1/flow-analysis/..").status)
+        assertEquals(HttpStatusCode.BadRequest, client.get("/v1/flow-analysis/a%2Fb").status)
+    }
+
+    @Test
+    fun `GET v1 flow-analysis for an unknown id creates no directory`() = testApplication {
+        val dataDir = createTempDirectory("flow-routes-no-dir").toFile()
+        application {
+            install(ContentNegotiation) { json() }
+            flowAnalysisRoutes(newTestService(FlowAnalysisStore(dataDir)))
+        }
+
+        assertEquals(HttpStatusCode.NotFound, client.get("/v1/flow-analysis/does-not-exist").status)
+
+        assertEquals(emptyList(), dataDir.list()!!.toList(), "a read must not create a directory")
+    }
+
+    @Test
+    fun `POST resolve answers 502 with a short reason when the Seer run cannot start`() = testApplication {
+        val store = FlowAnalysisStore(createTempDirectory("flow-routes-resolve-fail").toFile())
+        store.saveRequest(
+            FlowAnalysisRequest(
+                flowId = "flow-4",
+                traceIds = listOf("trace-1"),
+                startTimeMs = 1000L,
+                endTimeMs = 2000L,
+                dsn = "https://key@sentry.io/1",
+                userAnnotation = "tapped checkout twice",
+                sdk = "io.sentry.android@8.40.0",
+                events = listOf(FlowAnalysisEvent(type = "click", timestamp = 1500L, data = JsonObject(emptyMap())))
+            )
+        )
+        store.saveResult(
+            FlowAnalysisResponse(
+                flowId = "flow-4",
+                status = AnalysisStatus.COMPLETED,
+                recommendations = listOf(Recommendation(id = "rec-1", title = "T", description = "D"))
+            )
+        )
+        val seerClient = SeerClient(
+            authToken = "token",
+            org = "sentry-sdks",
+            httpClient = HttpClient(
+                MockEngine { _ ->
+                    respond(
+                        content = """{"detail": "Organization does not have the seer-explorer feature"}""",
+                        status = HttpStatusCode.Forbidden,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    )
+                }
+            ) { install(ClientContentNegotiation) { json(seerJson) } }
+        )
+        application {
+            install(ContentNegotiation) { json() }
+            flowAnalysisRoutes(
+                FlowAnalysisService(
+                    store = store,
+                    scope = CoroutineScope(Dispatchers.Unconfined),
+                    seerClient = seerClient
+                )
+            )
+        }
+
+        val response = client.post("/v1/flow-analysis/flow-4/recommendations/rec-1/resolve")
+
+        assertEquals(HttpStatusCode.BadGateway, response.status)
+        val body = response.bodyAsText()
+        assertEquals("""{"error":"could not start the Seer run"}""", body)
+        assertEquals(RecommendationStatus.OPEN, store.loadResult("flow-4")!!.recommendations.single().status)
     }
 
     @Test

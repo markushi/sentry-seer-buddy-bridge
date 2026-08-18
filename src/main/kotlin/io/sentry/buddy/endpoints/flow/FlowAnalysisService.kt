@@ -6,8 +6,10 @@ import io.sentry.buddy.FlowAnalysisResponse
 import io.sentry.buddy.Recommendation
 import io.sentry.buddy.RecommendationStatus
 import io.sentry.buddy.enrichment.Enrichment
+import io.sentry.buddy.seer.PAGE_NAME_FLOW_IMPLEMENT
 import io.sentry.buddy.seer.SeerClient
 import io.sentry.buddy.seer.SeerPrompts
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -45,35 +47,46 @@ class FlowAnalysisService(
 
     fun get(flowId: String): FlowAnalysisResponse? = store.loadResult(flowId)
 
-    suspend fun resolveRecommendation(flowId: String, recommendationId: String): ResolveOutcome {
-        val current = store.loadResult(flowId) ?: return ResolveOutcome.FlowAnalysisNotFound
-        val target = current.recommendations.find { it.id == recommendationId }
-            ?: return ResolveOutcome.RecommendationNotFound
-        if (!target.resolvable) return ResolveOutcome.NotResolvable
+    suspend fun resolveRecommendation(flowId: String, recommendationId: String): ResolveOutcome =
+        store.withFlowLock(flowId) {
+            val current = store.loadResult(flowId) ?: return@withFlowLock ResolveOutcome.FlowAnalysisNotFound
+            val target = current.recommendations.find { it.id == recommendationId }
+                ?: return@withFlowLock ResolveOutcome.RecommendationNotFound
+            if (!target.resolvable) return@withFlowLock ResolveOutcome.NotResolvable
 
-        val seerRunUrl = if (seerClient == null) {
-            null
-        } else {
-            val request = store.loadRequest(flowId)
-                ?: return ResolveOutcome.SeerStartFailed("no stored request for flow $flowId")
-            try {
-                val run = seerClient.startRun(SeerPrompts.implement(request, current.issues, target))
-                logger.info("Started the Seer implement run ${run.runId} for $flowId/$recommendationId")
-                seerClient.runUrl(run.sentryRunId)
-            } catch (e: Exception) {
-                logger.warn("Could not start the Seer implement run for $flowId/$recommendationId", e)
-                return ResolveOutcome.SeerStartFailed(e.message ?: "unknown error")
+            // The app retries a resolve after a 502, so a recommendation that already has its run
+            // must not start a second one and orphan the first.
+            if (target.status == RecommendationStatus.RESOLVED && target.seerRunUrl != null) {
+                return@withFlowLock ResolveOutcome.Success(target)
             }
-        }
 
-        val resolved = target.copy(status = RecommendationStatus.RESOLVED, seerRunUrl = seerRunUrl)
-        store.saveResult(
-            current.copy(
-                recommendations = current.recommendations.map { if (it.id == recommendationId) resolved else it }
+            val seerRunUrl = if (seerClient == null) {
+                null
+            } else {
+                val request = store.loadRequest(flowId)
+                    ?: return@withFlowLock ResolveOutcome.SeerStartFailed("no stored request for flow $flowId")
+                try {
+                    val run = seerClient.startRun(
+                        query = SeerPrompts.implement(request, current.issues, target),
+                        pageName = PAGE_NAME_FLOW_IMPLEMENT
+                    )
+                    logger.info("Started the Seer implement run ${run.runId} for $flowId/$recommendationId")
+                    seerClient.runUrl(run.sentryRunId)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    logger.warn("Could not start the Seer implement run for $flowId/$recommendationId", e)
+                    return@withFlowLock ResolveOutcome.SeerStartFailed(e.message ?: "unknown error")
+                }
+            }
+
+            val resolved = target.copy(status = RecommendationStatus.RESOLVED, seerRunUrl = seerRunUrl)
+            store.saveResult(
+                current.copy(
+                    recommendations = current.recommendations.map { if (it.id == recommendationId) resolved else it }
+                )
             )
-        )
-        return ResolveOutcome.Success(resolved)
-    }
+            ResolveOutcome.Success(resolved)
+        }
 
     private suspend fun runPipeline(request: FlowAnalysisRequest) {
         val result = try {
@@ -83,6 +96,7 @@ class FlowAnalysisService(
                 response = try {
                     enrichment.enrich(request, response)
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     logger.warn("Enrichment ${enrichment::class.simpleName} failed for flow ${request.flowId}", e)
                     errors += "${enrichment::class.simpleName}: ${e.message ?: "unknown error"}"
                     response
@@ -90,12 +104,13 @@ class FlowAnalysisService(
             }
             response.copy(status = AnalysisStatus.COMPLETED, enrichmentErrors = errors)
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             FlowAnalysisResponse(
                 flowId = request.flowId,
                 status = AnalysisStatus.FAILED,
                 error = e.message ?: "unknown error"
             )
         }
-        store.saveResult(result)
+        store.withFlowLock(request.flowId) { store.saveResult(result) }
     }
 }

@@ -2,17 +2,32 @@ package io.sentry.buddy.endpoints.flow
 
 import io.sentry.buddy.FlowAnalysisRequest
 import io.sentry.buddy.FlowAnalysisResponse
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 class FlowAnalysisStore(private val baseDir: File) {
 
-    private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
+    private val json = Json { ignoreUnknownKeys = true; prettyPrint = true; encodeDefaults = true }
 
-    private fun flowAnalysisDir(flowId: String): File = File(baseDir, flowId).apply { mkdirs() }
+    private val locks = ConcurrentHashMap<String, Mutex>()
+
+    /**
+     * Serializes load-modify-save for one flow. The analysis pipeline and a resolve call write the
+     * same file, and a resolve holds a network round-trip between its load and its save, thus
+     * without this lock one of the two writes is lost.
+     */
+    suspend fun <T> withFlowLock(flowId: String, block: suspend () -> T): T =
+        locks.computeIfAbsent(flowId) { Mutex() }.withLock { block() }
+
+    private fun flowAnalysisDir(flowId: String): File = File(baseDir, flowId)
+
+    private fun createdFlowAnalysisDir(flowId: String): File = flowAnalysisDir(flowId).apply { mkdirs() }
 
     fun saveRequest(request: FlowAnalysisRequest) {
-        File(flowAnalysisDir(request.flowId), "request.json")
+        File(createdFlowAnalysisDir(request.flowId), "request.json")
             .writeText(json.encodeToString(FlowAnalysisRequest.serializer(), request))
     }
 
@@ -23,7 +38,7 @@ class FlowAnalysisStore(private val baseDir: File) {
     }
 
     fun saveResult(response: FlowAnalysisResponse) {
-        File(flowAnalysisDir(response.flowId), "result.json")
+        File(createdFlowAnalysisDir(response.flowId), "result.json")
             .writeText(json.encodeToString(FlowAnalysisResponse.serializer(), response))
     }
 

@@ -17,10 +17,15 @@ import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.utils.io.*
 import io.sentry.buddy.seer.SeerClient
+import io.sentry.buddy.seer.seerJson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -41,19 +46,27 @@ class FlowAnalysisServiceTest {
         seerClient = seerClient
     )
 
-    private fun seerClientThatResponds(body: String, status: HttpStatusCode = HttpStatusCode.OK) = SeerClient(
+    private val startRequestCount = AtomicInteger()
+
+    private fun seerClientThatResponds(
+        body: String,
+        status: HttpStatusCode = HttpStatusCode.OK,
+        delayMs: Long = 0L
+    ) = SeerClient(
         authToken = "token",
         org = "sentry-sdks",
         projectId = "5428559",
         httpClient = HttpClient(
             MockEngine { _ ->
+                startRequestCount.incrementAndGet()
+                if (delayMs > 0) delay(delayMs)
                 respond(
                     content = ByteReadChannel(body),
                     status = status,
                     headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
                 )
             }
-        ) { install(ContentNegotiation) { json() } },
+        ) { install(ContentNegotiation) { json(seerJson) } },
         pollIntervalMs = 1L,
         timeoutMs = 1000L
     )
@@ -213,6 +226,87 @@ class FlowAnalysisServiceTest {
         val stored = store.loadResult("flow-1")!!.recommendations.single()
         assertEquals(RecommendationStatus.OPEN, stored.status)
         assertNull(stored.seerRunUrl)
+    }
+
+    @Test
+    fun `resolving twice keeps the first run url and starts no second run`() = runBlocking {
+        val store = FlowAnalysisStore(createTempDirectory("flow-resolve-twice").toFile())
+        store.saveRequest(sampleRequest())
+        store.saveResult(
+            FlowAnalysisResponse(
+                flowId = "flow-1",
+                status = AnalysisStatus.COMPLETED,
+                recommendations = listOf(Recommendation(id = "rec-1", title = "T", description = "D"))
+            )
+        )
+        val service = newService(
+            store = store,
+            seerClient = seerClientThatResponds("""{"run_id": 77, "sentry_run_id": "1ebfee71-uuid"}""")
+        )
+
+        val first = service.resolveRecommendation("flow-1", "rec-1")
+        val second = service.resolveRecommendation("flow-1", "rec-1")
+
+        assertTrue(first is ResolveOutcome.Success)
+        assertTrue(second is ResolveOutcome.Success)
+        assertEquals(first.recommendation.seerRunUrl, second.recommendation.seerRunUrl)
+        assertEquals(1, startRequestCount.get(), "the second resolve must not start a second run")
+    }
+
+    @Test
+    fun `two concurrent resolves of one flow both persist`() = runBlocking {
+        val store = FlowAnalysisStore(createTempDirectory("flow-resolve-concurrent").toFile())
+        store.saveRequest(sampleRequest())
+        store.saveResult(
+            FlowAnalysisResponse(
+                flowId = "flow-1",
+                status = AnalysisStatus.COMPLETED,
+                recommendations = listOf(
+                    Recommendation(id = "rec-1", title = "T", description = "D"),
+                    Recommendation(id = "rec-2", title = "T2", description = "D2")
+                )
+            )
+        )
+        val service = newService(
+            store = store,
+            // The delay puts the network round-trip of one resolve inside the other's load-save gap.
+            seerClient = seerClientThatResponds("""{"run_id": 77, "sentry_run_id": "1ebfee71-uuid"}""", delayMs = 50)
+        )
+
+        listOf(
+            async { service.resolveRecommendation("flow-1", "rec-1") },
+            async { service.resolveRecommendation("flow-1", "rec-2") }
+        ).awaitAll()
+
+        val stored = store.loadResult("flow-1")!!.recommendations
+        assertEquals(
+            listOf(RecommendationStatus.RESOLVED, RecommendationStatus.RESOLVED),
+            stored.map { it.status },
+            "neither resolve may erase the other"
+        )
+    }
+
+    @Test
+    fun `resolveRecommendation fails when the Seer client has no stored request for the flow`() = runBlocking {
+        val store = FlowAnalysisStore(createTempDirectory("flow-resolve-no-request").toFile())
+        store.saveResult(
+            FlowAnalysisResponse(
+                flowId = "flow-1",
+                status = AnalysisStatus.COMPLETED,
+                recommendations = listOf(Recommendation(id = "rec-1", title = "T", description = "D"))
+            )
+        )
+        val service = newService(
+            store = store,
+            seerClient = seerClientThatResponds("""{"run_id": 77, "sentry_run_id": "uuid"}""")
+        )
+
+        val outcome = service.resolveRecommendation("flow-1", "rec-1")
+
+        assertTrue(outcome is ResolveOutcome.SeerStartFailed)
+        assertTrue(outcome.message.contains("no stored request"))
+        assertEquals(0, startRequestCount.get(), "no run is started without the flow data")
+        assertEquals(RecommendationStatus.OPEN, store.loadResult("flow-1")!!.recommendations.single().status)
     }
 
     @Test
