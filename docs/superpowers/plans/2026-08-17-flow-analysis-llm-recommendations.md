@@ -4,15 +4,15 @@
 
 **Goal:** Add a second recommendation source that uses the `claude` CLI, grounded in a purpose-built skill document, to analyze the raw flow events + user annotation + related Sentry issues and produce free-form recommendations.
 
-**Architecture:** A skill document at `.claude/skills/flow-analysis/SKILL.md` teaches `claude -p` how to analyze a flow and defines the exact JSON schema it must respond with. `LlmRecommendationSource` implements the existing `RecommendationEngine` interface (from Plan 1) by building a prompt from the `FlowAnalysisRequest` + `List<SentryIssue>`, shelling out to `claude -p`, and parsing the JSON response into `Recommendation`s (assigning fresh UUIDs and `OPEN` status itself — the model never controls those fields). Any failure (process error, malformed JSON) is caught inside the source and degrades to an empty list, so one bad LLM response can't fail the whole flow or blank out the SDK-upgrade recommendation from Plan 3.
+**Architecture:** A skill document at `.claude/skills/flow-analysis/SKILL.md` teaches `claude -p` how to analyze a flow and defines the exact JSON schema it must respond with. `LlmRecommendationEnrichment` implements the existing `Enrichment` by building a prompt from the `FlowAnalysisRequest` + `List<SentryIssue>`, shelling out to `claude -p`, and parsing the JSON response into `Recommendation`s (assigning fresh UUIDs and `OPEN` status itself — the model never controls those fields). Any failure (process error, malformed JSON) is caught inside the source and degrades to an empty list, so one bad LLM response can't fail the whole flow or blank out the SDK-upgrade recommendation from Plan 3.
 
-**Tech Stack:** JDK `ProcessBuilder` (same pattern as Plan 1's `ClaudeCliTitleGenerator`), kotlinx.serialization for parsing the model's JSON output.
+**Tech Stack:** JDK `ProcessBuilder` (same pattern as `TitleEnrichment`), kotlinx.serialization for parsing the model's JSON output.
 
 **Spec:** `docs/superpowers/specs/2026-08-17-flow-analysis-api-design.md`, section 5.2.
 
-**Depends on:** Plan 1 (`FlowAnalysisRequest`, `SentryIssue`, `Recommendation`, `Severity`, `RecommendationStatus`,
-`RecommendationEngine`) and Plan 3 (`CompositeRecommendationEngine`, and the existing
-`SdkUpgradeRecommendationSource` wiring in `ConfigureFlowAnalysis.kt` this plan adds to).
+**Depends on:** the existing `io.sentry.buddy.flow` package (`FlowAnalysisRequest`, `SentryIssue`,
+`Recommendation`, `Severity`, `RecommendationStatus`, `FlowAnalysisResponse`) and the existing
+`io.sentry.buddy.enrichment` package (`Enrichment`).
 
 ## Global Constraints
 
@@ -24,6 +24,8 @@
 - The `claude` CLI must be run from a working directory where `.claude/skills/flow-analysis/`
   is discoverable (the repo root — true for `./gradlew run` and for tests that don't invoke the
   real CLI).
+- Related Sentry issues come from `response.issues`, not a separate parameter — `IssueEnrichment`
+  runs earlier in the `enrichments` list and populates `response.issues` before this enrichment sees it.
 
 ---
 
@@ -31,10 +33,10 @@
 
 - Create: `.claude/skills/flow-analysis/SKILL.md` — the skill document `claude -p` uses to analyze
   a flow and the `Recommendation` output schema.
-- Create: `src/main/kotlin/buddy/LlmRecommendationSource.kt`
-- Modify: `src/main/kotlin/buddy/ConfigureFlowAnalysis.kt` — add `LlmRecommendationSource()` to the
-  `CompositeRecommendationEngine`'s source list.
-- Test: `src/test/kotlin/buddy/LlmRecommendationSourceTest.kt`
+- Create: `src/main/kotlin/io/sentry/buddy/enrichment/LlmRecommendationEnrichment.kt`
+- Modify: `src/main/kotlin/io/sentry/buddy/flow/ConfigureFlowAnalysis.kt` — add
+  `LlmRecommendationEnrichment()` to the `enrichments` list, after `IssueEnrichment`.
+- Test: `src/test/kotlin/io/sentry/buddy/enrichment/LlmRecommendationEnrichmentTest.kt`
 
 ---
 
@@ -43,7 +45,7 @@
 **Files:**
 - Create: `.claude/skills/flow-analysis/SKILL.md`
 
-**Interfaces:** none — this is a prompt/schema document consumed by `LlmRecommendationSource` (Task 2) at runtime via the `claude` CLI, not by any Kotlin code directly.
+**Interfaces:** none — this is a prompt/schema document consumed by `LlmRecommendationEnrichment` (Task 2) at runtime via the `claude` CLI, not by any Kotlin code directly.
 
 - [ ] **Step 1: Write the skill document**
 
@@ -61,11 +63,12 @@ queries, etc.), and any Sentry issues already found for the flow's trace ids.
 
 ## What to look for
 
-- Redundant or duplicate user actions (e.g. the same button tapped multiple times in a short
-  window) that suggest a confusing or unresponsive UI.
-- Slow or failing network requests visible in the event log.
-- Correlation between a user action and a nearby Sentry issue (same time window).
-- Anything in the user's own description that describes a problem the events corroborate.
+- Slow or failing network requests visible in the event log
+- Slow database requests
+- Missing instrumentation, e.g. if there are user interactions, but no network or database queries, there's like not enough sentry instrumentation present
+- Correlation between a user action and a nearby Sentry issue (same time window)
+- Anything in the user's own description that describes a problem the events corroborate
+
 
 ## Output format
 
@@ -78,8 +81,7 @@ matching this schema:
     "title": "string, short imperative summary, max 12 words",
     "description": "string, 1-3 sentences explaining the issue and the suggested fix",
     "link": "string or null, a URL if directly relevant (e.g. a docs page), otherwise null",
-    "severity": "LOW | MEDIUM | HIGH",
-    "resolvable": true
+    "severity": "LOW | MEDIUM | HIGH"
   }
 ]
 ```
@@ -109,28 +111,35 @@ git commit -m "docs: add flow-analysis skill for LLM-powered recommendations"
 
 ---
 
-### Task 2: `LlmRecommendationSource`
+### Task 2: `LlmRecommendationEnrichment`
 
 **Files:**
-- Create: `src/main/kotlin/buddy/LlmRecommendationSource.kt`
-- Test: `src/test/kotlin/buddy/LlmRecommendationSourceTest.kt`
+- Create: `src/main/kotlin/io/sentry/buddy/enrichment/LlmRecommendationEnrichment.kt`
+- Test: `src/test/kotlin/io/sentry/buddy/enrichment/LlmRecommendationEnrichmentTest.kt`
 
 **Interfaces:**
-- Consumes: `FlowAnalysisRequest`, `SentryIssue`, `Recommendation`, `Severity`, `RecommendationEngine`
-  (Plan 1), the skill document (Task 1, referenced by name in the prompt).
+- Consumes: `FlowAnalysisRequest`, `FlowAnalysisResponse`, `SentryIssue`, `Recommendation`,
+  `Severity`, `Enrichment` (`fun interface Enrichment { suspend fun enrich(request: FlowAnalysisRequest, response: FlowAnalysisResponse): FlowAnalysisResponse }`)
 - Produces: `internal fun parseRecommendations(output: String, json: Json): List<Recommendation>`,
-  `class LlmRecommendationSource(json: Json = <default>, runClaude: (String) -> String = ::runClaudeCli) : RecommendationEngine` —
+  `class LlmRecommendationEnrichment(json: Json = <default>, runClaude: (String) -> String = ::runClaudeCli) : Enrichment` —
   used by `ConfigureFlowAnalysis.kt` (Task 3).
 
 `runClaude` is constructor-injected (defaulting to the real `claude -p` process call) specifically
-so tests can simulate the CLI failing without needing the real binary — same reasoning as Plan 1's
-`TitleGenerator` interface.
+so tests can simulate the CLI failing without needing the real binary — same reasoning as
+`TitleEnrichment`'s process-call pattern.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```kotlin
-package io.sentry.buddy
+package io.sentry.buddy.enrichment
 
+import io.sentry.buddy.flow.AnalysisStatus
+import io.sentry.buddy.flow.FlowAnalysisEvent
+import io.sentry.buddy.flow.FlowAnalysisRequest
+import io.sentry.buddy.flow.FlowAnalysisResponse
+import io.sentry.buddy.flow.RecommendationStatus
+import io.sentry.buddy.flow.Severity
+import io.sentry.buddy.flow.SentryIssue
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -139,7 +148,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
-class LlmRecommendationSourceTest {
+class LlmRecommendationEnrichmentTest {
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -152,6 +161,12 @@ class LlmRecommendationSourceTest {
         userAnnotation = "tapped checkout twice",
         sdk = "io.sentry.android@8.40.0",
         events = listOf(FlowAnalysisEvent(type = "click", timestamp = 1500L, data = JsonObject(emptyMap())))
+    )
+
+    private fun sampleResponse(issues: List<SentryIssue> = emptyList()) = FlowAnalysisResponse(
+        flowId = "flow-1",
+        status = AnalysisStatus.PROCESSING,
+        issues = issues
     )
 
     @Test
@@ -180,54 +195,61 @@ class LlmRecommendationSourceTest {
     }
 
     @Test
-    fun `generateRecommendations returns the parsed recommendations on success`() = runBlocking {
-        val source = LlmRecommendationSource(
+    fun `enrich appends the parsed recommendations on success`() = runBlocking {
+        val enrichment = LlmRecommendationEnrichment(
             json = json,
             runClaude = { """[{"title": "T", "description": "D", "severity": "LOW"}]""" }
         )
 
-        val recommendations = source.generateRecommendations(sampleRequest(), emptyList())
+        val result = enrichment.enrich(sampleRequest(), sampleResponse())
 
-        assertEquals(1, recommendations.size)
-        assertEquals("T", recommendations.single().title)
+        assertEquals(1, result.recommendations.size)
+        assertEquals("T", result.recommendations.single().title)
     }
 
     @Test
-    fun `generateRecommendations returns an empty list when the claude process fails`() = runBlocking {
-        val source = LlmRecommendationSource(
+    fun `enrich returns the response unchanged when the claude process fails`() = runBlocking {
+        val enrichment = LlmRecommendationEnrichment(
             json = json,
             runClaude = { throw IllegalStateException("claude not installed") }
         )
 
-        val recommendations = source.generateRecommendations(sampleRequest(), emptyList())
+        val response = sampleResponse()
+        val result = enrichment.enrich(sampleRequest(), response)
 
-        assertEquals(emptyList(), recommendations)
+        assertEquals(response, result)
     }
 
     @Test
-    fun `generateRecommendations returns an empty list when the output is not valid JSON`() = runBlocking {
-        val source = LlmRecommendationSource(
+    fun `enrich returns the response unchanged when the output is not valid JSON`() = runBlocking {
+        val enrichment = LlmRecommendationEnrichment(
             json = json,
             runClaude = { "Sure, here are some recommendations: not json" }
         )
 
-        val recommendations = source.generateRecommendations(sampleRequest(), emptyList())
+        val response = sampleResponse()
+        val result = enrichment.enrich(sampleRequest(), response)
 
-        assertEquals(emptyList(), recommendations)
+        assertEquals(response, result)
     }
 }
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `./gradlew test --tests "io.sentry.buddy.LlmRecommendationSourceTest"`
-Expected: FAIL — compilation error, `LlmRecommendationSource.kt` doesn't exist yet.
+Run: `./gradlew test --tests "io.sentry.buddy.enrichment.LlmRecommendationEnrichmentTest"`
+Expected: FAIL — compilation error, `LlmRecommendationEnrichment.kt` doesn't exist yet.
 
 - [ ] **Step 3: Write the implementation**
 
 ```kotlin
-package io.sentry.buddy
+package io.sentry.buddy.enrichment
 
+import io.sentry.buddy.flow.FlowAnalysisRequest
+import io.sentry.buddy.flow.FlowAnalysisResponse
+import io.sentry.buddy.flow.Recommendation
+import io.sentry.buddy.flow.Severity
+import io.sentry.buddy.flow.SentryIssue
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -267,18 +289,19 @@ internal fun runClaudeCli(prompt: String): String {
     return output
 }
 
-class LlmRecommendationSource(
+class LlmRecommendationEnrichment(
     private val json: Json = Json { ignoreUnknownKeys = true },
     private val runClaude: (String) -> String = ::runClaudeCli
-) : RecommendationEngine {
+) : Enrichment {
 
-    override suspend fun generateRecommendations(
-        request: FlowAnalysisRequest,
-        issues: List<SentryIssue>
-    ): List<Recommendation> = try {
-        parseRecommendations(runClaude(buildPrompt(request, issues)), json)
-    } catch (e: Exception) {
-        emptyList()
+    override suspend fun enrich(request: FlowAnalysisRequest, response: FlowAnalysisResponse): FlowAnalysisResponse {
+        val recommendations = try {
+            parseRecommendations(runClaude(buildPrompt(request, response.issues)), json)
+        } catch (e: Exception) {
+            emptyList()
+        }
+        if (recommendations.isEmpty()) return response
+        return response.copy(recommendations = response.recommendations + recommendations)
     }
 
     private fun buildPrompt(request: FlowAnalysisRequest, issues: List<SentryIssue>): String = buildString {
@@ -296,14 +319,15 @@ class LlmRecommendationSource(
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `./gradlew test --tests "io.sentry.buddy.LlmRecommendationSourceTest"`
+Run: `./gradlew test --tests "io.sentry.buddy.enrichment.LlmRecommendationEnrichmentTest"`
 Expected: PASS (5 tests)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/main/kotlin/buddy/LlmRecommendationSource.kt src/test/kotlin/buddy/LlmRecommendationSourceTest.kt
-git commit -m "feat(flow-analysis): add LLM-powered recommendation source"
+git add src/main/kotlin/io/sentry/buddy/enrichment/LlmRecommendationEnrichment.kt \
+        src/test/kotlin/io/sentry/buddy/enrichment/LlmRecommendationEnrichmentTest.kt
+git commit -m "feat(flow-analysis): add LLM-powered recommendation enrichment"
 ```
 
 ---
@@ -311,18 +335,22 @@ git commit -m "feat(flow-analysis): add LLM-powered recommendation source"
 ### Task 3: Wire it into `ConfigureFlowAnalysis.kt`
 
 **Files:**
-- Modify: `src/main/kotlin/buddy/ConfigureFlowAnalysis.kt`
+- Modify: `src/main/kotlin/io/sentry/buddy/flow/ConfigureFlowAnalysis.kt`
 
 **Interfaces:**
-- Consumes: `LlmRecommendationSource` (Task 2), `CompositeRecommendationEngine`,
-  `SdkUpgradeRecommendationSource` (Plan 3).
+- Consumes: `LlmRecommendationEnrichment` (Task 2), `IssueEnrichment`, `SdkUpgradeEnrichment`,
+  `TitleEnrichment` (existing `enrichments` list entries in `FlowAnalysisService`).
 
-- [ ] **Step 1: Add `LlmRecommendationSource()` to the composite's source list**
+- [ ] **Step 1: Add `LlmRecommendationEnrichment()` to the `enrichments` list, after `IssueEnrichment`**
 
 ```kotlin
-package io.sentry.buddy
+package io.sentry.buddy.flow
 
-import io.ktor.server.application.Application
+import io.ktor.server.application.*
+import io.sentry.buddy.enrichment.IssueEnrichment
+import io.sentry.buddy.enrichment.LlmRecommendationEnrichment
+import io.sentry.buddy.enrichment.SdkUpgradeEnrichment
+import io.sentry.buddy.enrichment.TitleEnrichment
 import java.io.File
 
 fun Application.configureFlowAnalysis(
@@ -330,18 +358,24 @@ fun Application.configureFlowAnalysis(
         store = FlowAnalysisStore(
             File(environment.config.propertyOrNull("flowAnalysis.dataDir")?.getString() ?: "data/flow-analysis")
         ),
-        issueFetcher = System.getenv("SENTRY_AUTH_TOKEN")
-            ?.let { token -> SentryIssuesClient(authToken = token) }
-            ?: NoOpIssueFetcher,
-        recommendationEngine = CompositeRecommendationEngine(
-            listOf(SdkUpgradeRecommendationSource(), LlmRecommendationSource())
-        ),
-        titleGenerator = ClaudeCliTitleGenerator()
+        enrichments = listOfNotNull(
+            System.getenv("SENTRY_AUTH_TOKEN")
+                ?.takeIf { it.isNotBlank() }
+                ?.let { token -> IssueEnrichment(authToken = token) },
+            LlmRecommendationEnrichment(),
+            SdkUpgradeEnrichment(),
+            TitleEnrichment()
+        )
     )
 ) {
     flowAnalysisRoutes(flowAnalysisService)
 }
 ```
+
+`LlmRecommendationEnrichment` is placed right after `IssueEnrichment` so `response.issues` is
+already populated when it builds its prompt — see the Global Constraint above. It runs
+unconditionally (unlike `IssueEnrichment`, it needs no auth token): the `claude` CLI failing or
+being absent degrades to no LLM recommendations, per Task 2's `enrich`.
 
 - [ ] **Step 2: Run the full test suite**
 
@@ -381,6 +415,6 @@ the SDK version is outdated) and an LLM-generated entry about the double-tap, ea
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/main/kotlin/buddy/ConfigureFlowAnalysis.kt
-git commit -m "feat(flow-analysis): wire the LLM-powered recommendation source into the pipeline"
+git add src/main/kotlin/io/sentry/buddy/flow/ConfigureFlowAnalysis.kt
+git commit -m "feat(flow-analysis): wire the LLM-powered recommendation enrichment into the pipeline"
 ```
