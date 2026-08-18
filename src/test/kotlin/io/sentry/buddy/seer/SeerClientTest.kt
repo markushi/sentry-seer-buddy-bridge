@@ -7,7 +7,6 @@ import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -28,9 +27,9 @@ class SeerClientTest {
                 headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
             )
         }
-        // Real Seer/Sentry responses carry many more fields than the DTOs declare (see
-        // monolith_chat_endpoints.md section 5); ignoreUnknownKeys matches the client's own default.
-        return HttpClient(engine) { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } }
+        // The same value SeerClient's own default httpClient installs, not a second literal that
+        // could drift from it.
+        return HttpClient(engine) { install(ContentNegotiation) { json(seerJson) } }
     }
 
     private fun seerClient(httpClient: HttpClient, projectId: String? = "5428559") = SeerClient(

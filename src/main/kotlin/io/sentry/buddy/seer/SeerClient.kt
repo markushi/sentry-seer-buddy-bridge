@@ -17,6 +17,13 @@ import kotlinx.serialization.json.Json
 /** The two identities of one Seer run: the numeric id for the API, the UUID for the UI link. */
 data class SeerRun(val runId: Long, val sentryRunId: String)
 
+/**
+ * The `Json` used to decode Seer HTTP responses. Real responses carry far more fields than the
+ * DTOs below declare (see monolith_chat_endpoints.md section 5), so unknown keys must be ignored.
+ * Exposed so tests can install the same value instead of a second literal that could drift.
+ */
+internal val seerJson: Json = Json { ignoreUnknownKeys = true }
+
 @Serializable
 private data class StartRunRequest(
     val query: String,
@@ -49,7 +56,7 @@ class SeerClient(
     private val org: String,
     private val projectId: String? = null,
     private val httpClient: HttpClient = HttpClient(CIO) {
-        install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        install(ContentNegotiation) { json(seerJson) }
     },
     private val baseUrl: String = "https://sentry.io",
     private val pollIntervalMs: Long = 2_000,

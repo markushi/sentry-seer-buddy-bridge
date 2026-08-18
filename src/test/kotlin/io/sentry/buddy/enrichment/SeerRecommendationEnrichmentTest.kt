@@ -14,6 +14,7 @@ import io.sentry.buddy.RecommendationStatus
 import io.sentry.buddy.SentryIssue
 import io.sentry.buddy.Severity
 import io.sentry.buddy.seer.SeerClient
+import io.sentry.buddy.seer.seerJson
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -54,7 +55,7 @@ class SeerRecommendationEnrichmentTest {
                 headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
             )
         }
-        return HttpClient(engine) { install(ContentNegotiation) { json(json) } }
+        return HttpClient(engine) { install(ContentNegotiation) { json(seerJson) } }
     }
 
     private fun enrichmentWith(client: HttpClient) = SeerRecommendationEnrichment(
