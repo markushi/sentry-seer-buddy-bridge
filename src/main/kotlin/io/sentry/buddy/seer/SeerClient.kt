@@ -12,6 +12,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 /** The two identities of one Seer run: the numeric id for the API, the UUID for the UI link. */
 data class SeerRun(val runId: Long, val sentryRunId: String)
@@ -33,14 +34,12 @@ private data class RunStateResponse(val session: SeerSession? = null)
 
 @Serializable
 private data class SeerSession(
-    @SerialName("run_id") val runId: Long? = null,
     val status: String,
     val blocks: List<SeerBlock> = emptyList()
 )
 
 @Serializable
 private data class SeerBlock(
-    val id: String? = null,
     val message: String? = null,
     val loading: Boolean = false
 )
@@ -49,7 +48,9 @@ class SeerClient(
     private val authToken: String,
     private val org: String,
     private val projectId: String? = null,
-    private val httpClient: HttpClient = HttpClient(CIO) { install(ContentNegotiation) { json() } },
+    private val httpClient: HttpClient = HttpClient(CIO) {
+        install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+    },
     private val baseUrl: String = "https://sentry.io",
     private val pollIntervalMs: Long = 2_000,
     private val timeoutMs: Long = 120_000

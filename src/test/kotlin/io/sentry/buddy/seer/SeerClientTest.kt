@@ -7,6 +7,7 @@ import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -27,7 +28,9 @@ class SeerClientTest {
                 headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
             )
         }
-        return HttpClient(engine) { install(ContentNegotiation) { json() } }
+        // Real Seer/Sentry responses carry many more fields than the DTOs declare (see
+        // monolith_chat_endpoints.md section 5); ignoreUnknownKeys matches the client's own default.
+        return HttpClient(engine) { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } }
     }
 
     private fun seerClient(httpClient: HttpClient, projectId: String? = "5428559") = SeerClient(
@@ -106,6 +109,44 @@ class SeerClientTest {
 
         assertFailsWith<IllegalStateException> { client.awaitAnswer(42L) }
         Unit
+    }
+
+    @Test
+    fun `awaitAnswer tolerates the extra fields a real poll response carries`() = runBlocking {
+        val client = seerClient(
+            clientOf(
+                """
+                {
+                  "sentry_run_id": "3f2c-uuid",
+                  "session": {
+                    "run_id": 42,
+                    "status": "completed",
+                    "updated_at": "2026-08-18T09:12:00Z",
+                    "owner_user_id": 7,
+                    "pending_user_input": null,
+                    "repo_pr_states": [],
+                    "blocks": [
+                      {
+                        "id": "b1",
+                        "message": "the answer",
+                        "loading": false,
+                        "timestamp": "2026-08-18T09:12:05Z",
+                        "artifacts": [],
+                        "file_patches": [],
+                        "merged_file_patches": [],
+                        "pr_commit_shas": [],
+                        "todos": [],
+                        "tool_links": [],
+                        "tool_results": []
+                      }
+                    ]
+                  }
+                }
+                """.trimIndent() to HttpStatusCode.OK
+            )
+        )
+
+        assertEquals("the answer", client.awaitAnswer(42L))
     }
 
     @Test
