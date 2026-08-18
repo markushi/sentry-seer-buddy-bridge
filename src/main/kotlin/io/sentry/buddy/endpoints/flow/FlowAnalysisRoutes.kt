@@ -38,7 +38,7 @@ fun Application.flowAnalysisRoutes(flowAnalysisService: FlowAnalysisService) {
                 val recommendationId = call.parameters["recommendationId"]!!
 
                 when (val outcome = flowAnalysisService.resolveRecommendation(flowId, recommendationId)) {
-                    is ResolveOutcome.Success -> call.respond(outcome.response)
+                    is ResolveOutcome.Success -> call.respond(outcome.recommendation)
                     ResolveOutcome.FlowAnalysisNotFound ->
                         call.respond(HttpStatusCode.NotFound, mapOf("error" to "flow not found"))
 
@@ -47,6 +47,12 @@ fun Application.flowAnalysisRoutes(flowAnalysisService: FlowAnalysisService) {
 
                     ResolveOutcome.NotResolvable ->
                         call.respond(HttpStatusCode.Conflict, mapOf("error" to "recommendation is not resolvable"))
+
+                    is ResolveOutcome.SeerStartFailed ->
+                        call.respond(
+                            HttpStatusCode.BadGateway,
+                            mapOf("error" to "could not start the Seer run: ${outcome.message}")
+                        )
                 }
             }
         }

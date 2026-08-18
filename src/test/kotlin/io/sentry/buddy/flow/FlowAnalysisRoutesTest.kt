@@ -7,6 +7,9 @@ import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.testing.*
+import io.sentry.buddy.AnalysisStatus
+import io.sentry.buddy.FlowAnalysisResponse
+import io.sentry.buddy.Recommendation
 import io.sentry.buddy.endpoints.flow.FlowAnalysisService
 import io.sentry.buddy.endpoints.flow.FlowAnalysisStore
 import io.sentry.buddy.endpoints.flow.flowAnalysisRoutes
@@ -117,5 +120,31 @@ class FlowAnalysisRoutesTest {
         }
 
         assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `POST resolve answers with the updated recommendation only`() = testApplication {
+        val store = FlowAnalysisStore(createTempDirectory("flow-routes-resolve").toFile())
+        store.saveResult(
+            FlowAnalysisResponse(
+                flowId = "flow-3",
+                status = AnalysisStatus.COMPLETED,
+                recommendations = listOf(Recommendation(id = "rec-1", title = "T", description = "D"))
+            )
+        )
+        application {
+            install(ContentNegotiation) { json() }
+            flowAnalysisRoutes(
+                FlowAnalysisService(store = store, scope = CoroutineScope(Dispatchers.Unconfined))
+            )
+        }
+
+        val response = client.post("/v1/flow-analysis/flow-3/recommendations/rec-1/resolve")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals("\"rec-1\"", body["id"].toString())
+        assertEquals("\"RESOLVED\"", body["status"].toString())
+        assertEquals(null, body["flow_id"], "the answer is the recommendation, not the whole analysis")
     }
 }
