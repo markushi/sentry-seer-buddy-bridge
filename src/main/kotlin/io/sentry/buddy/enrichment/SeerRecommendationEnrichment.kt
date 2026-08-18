@@ -3,15 +3,13 @@ package io.sentry.buddy.enrichment
 import io.sentry.buddy.FlowAnalysisRequest
 import io.sentry.buddy.FlowAnalysisResponse
 import io.sentry.buddy.Recommendation
-import io.sentry.buddy.SentryIssue
 import io.sentry.buddy.Severity
 import io.sentry.buddy.seer.SeerClient
+import io.sentry.buddy.seer.SeerPrompts
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.util.UUID
-
-private const val MAX_EVENTS_IN_PROMPT = 200
 
 @Serializable
 private data class SeerRecommendationDto(
@@ -54,31 +52,10 @@ class SeerRecommendationEnrichment(
 ) : Enrichment {
 
     override suspend fun enrich(request: FlowAnalysisRequest, response: FlowAnalysisResponse): FlowAnalysisResponse {
-        val run = seerClient.startRun(buildPrompt(request, response.issues))
+        val run = seerClient.startRun(SeerPrompts.analysis(request, response.issues))
         val recommendations = parseRecommendations(seerClient.awaitAnswer(run.runId), json)
 
         if (recommendations.isEmpty()) return response
         return response.copy(recommendations = response.recommendations + recommendations)
-    }
-
-    private fun buildPrompt(request: FlowAnalysisRequest, issues: List<SentryIssue>): String = buildString {
-        appendLine(instructions)
-        appendLine()
-        appendLine("## Flow data")
-        appendLine()
-        appendLine("User annotation: ${request.userAnnotation}")
-        appendLine("SDK: ${request.sdk}")
-        appendLine("Events (${request.events.size}):")
-        request.events.take(MAX_EVENTS_IN_PROMPT).forEach { appendLine("- [${it.timestamp}] ${it.type}: ${it.data}") }
-        if (request.events.size > MAX_EVENTS_IN_PROMPT) {
-            appendLine("- ... ${request.events.size - MAX_EVENTS_IN_PROMPT} more events not shown")
-        }
-        appendLine("Related Sentry issues (${issues.size}):")
-        issues.forEach { appendLine("- ${it.title} (${it.level}, count=${it.count}): ${it.permalink}") }
-    }
-
-    private val instructions: String by lazy {
-        SeerRecommendationEnrichment::class.java.getResource("/flow-analysis-prompt.md")?.readText()
-            ?: throw IllegalStateException("flow-analysis-prompt.md is not on the classpath")
     }
 }
