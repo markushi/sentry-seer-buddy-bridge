@@ -1,6 +1,7 @@
 package io.sentry.buddy
 
 import io.sentry.buddy.flow.AnalysisStatus
+import io.sentry.buddy.flow.Enrichment
 import io.sentry.buddy.flow.FlowAnalysisEvent
 import io.sentry.buddy.flow.FlowAnalysisRequest
 import io.sentry.buddy.flow.FlowAnalysisResponse
@@ -9,7 +10,6 @@ import io.sentry.buddy.flow.FlowAnalysisStore
 import io.sentry.buddy.flow.Recommendation
 import io.sentry.buddy.flow.RecommendationStatus
 import io.sentry.buddy.flow.ResolveOutcome
-import io.sentry.buddy.tooling.TitleGenerator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.json.JsonObject
@@ -23,10 +23,10 @@ class FlowAnalysisServiceTest {
 
     private fun newService(
         store: FlowAnalysisStore = FlowAnalysisStore(createTempDirectory("flow-service-test").toFile()),
-        titleGenerator: TitleGenerator = TitleGenerator { "Test title" }
+        enrichments: List<Enrichment> = listOf(Enrichment { _, response -> response.copy(title = "Test title") })
     ): FlowAnalysisService = FlowAnalysisService(
         store = store,
-        titleGenerator = titleGenerator,
+        enrichments = enrichments,
         scope = CoroutineScope(Dispatchers.Unconfined)
     )
 
@@ -67,7 +67,7 @@ class FlowAnalysisServiceTest {
 
     @Test
     fun `pipeline failure marks the flow as FAILED with the error message`() {
-        val service = newService(titleGenerator = TitleGenerator { throw IllegalStateException("boom") })
+        val service = newService(enrichments = listOf(Enrichment { _, _ -> throw IllegalStateException("boom") }))
 
         service.submitOrGetExisting(sampleRequest())
 
@@ -75,6 +75,22 @@ class FlowAnalysisServiceTest {
         assertNotNull(result)
         assertEquals(AnalysisStatus.FAILED, result.status)
         assertEquals("boom", result.error)
+    }
+
+    @Test
+    fun `enrichments run in order, each building on the previous response`() {
+        val service = newService(
+            enrichments = listOf(
+                Enrichment { _, response -> response.copy(title = "First") },
+                Enrichment { _, response -> response.copy(title = response.title + " then second") }
+            )
+        )
+
+        service.submitOrGetExisting(sampleRequest())
+
+        val result = service.get("flow-1")
+        assertNotNull(result)
+        assertEquals("First then second", result.title)
     }
 
     @Test

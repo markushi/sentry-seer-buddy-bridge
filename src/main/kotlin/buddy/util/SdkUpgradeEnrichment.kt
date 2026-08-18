@@ -7,10 +7,10 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.serialization.kotlinx.json.json
+import io.sentry.buddy.flow.Enrichment
 import io.sentry.buddy.flow.FlowAnalysisRequest
+import io.sentry.buddy.flow.FlowAnalysisResponse
 import io.sentry.buddy.flow.Recommendation
-import io.sentry.buddy.flow.RecommendationEngine
-import io.sentry.buddy.flow.SentryIssue
 import io.sentry.buddy.flow.Severity
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
@@ -19,32 +19,28 @@ import java.util.UUID
 @Serializable
 private data class GithubReleaseDto(val tag_name: String)
 
-class SdkUpgradeRecommendationSource(
+class SdkUpgradeEnrichment(
     private val httpClient: HttpClient = HttpClient(CIO) { install(ContentNegotiation) { json() } },
     private val releasesUrl: String = "https://api.github.com/repos/getsentry/sentry-java/releases/latest"
-) : RecommendationEngine {
+) : Enrichment {
 
-    private val logger = LoggerFactory.getLogger(SdkUpgradeRecommendationSource::class.java)
+    private val logger = LoggerFactory.getLogger(SdkUpgradeEnrichment::class.java)
 
-    override suspend fun generateRecommendations(
-        request: FlowAnalysisRequest,
-        issues: List<SentryIssue>
-    ): List<Recommendation> {
-        val currentVersion = parseSdkVersion(request.sdk) ?: return emptyList()
-        val latestVersion = fetchLatestReleaseVersion() ?: return emptyList()
+    override suspend fun enrich(request: FlowAnalysisRequest, response: FlowAnalysisResponse): FlowAnalysisResponse {
+        val currentVersion = parseSdkVersion(request.sdk) ?: return response
+        val latestVersion = fetchLatestReleaseVersion() ?: return response
 
-        if (!isOutdated(current = currentVersion, latest = latestVersion)) return emptyList()
+        if (!isOutdated(current = currentVersion, latest = latestVersion)) return response
 
-        return listOf(
-            Recommendation(
-                id = UUID.randomUUID().toString(),
-                title = "Upgrade Sentry SDK to $latestVersion",
-                description = "This flow used ${request.sdk}, but sentry-java $latestVersion is available. " +
-                    "Newer SDK versions include bug fixes and performance improvements.",
-                link = "https://github.com/getsentry/sentry-java/releases/tag/$latestVersion",
-                severity = Severity.LOW
-            )
+        val recommendation = Recommendation(
+            id = UUID.randomUUID().toString(),
+            title = "Upgrade Sentry SDK to $latestVersion",
+            description = "This flow used ${request.sdk}, but sentry-java $latestVersion is available. " +
+                "Newer SDK versions include bug fixes and performance improvements.",
+            link = "https://github.com/getsentry/sentry-java/releases/tag/$latestVersion",
+            severity = Severity.LOW
         )
+        return response.copy(recommendations = response.recommendations + recommendation)
     }
 
     private suspend fun fetchLatestReleaseVersion(): String? = try {

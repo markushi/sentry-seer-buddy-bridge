@@ -1,14 +1,15 @@
 package io.sentry.buddy.tooling
 
+import io.sentry.buddy.flow.Enrichment
 import io.sentry.buddy.flow.FlowAnalysisRequest
+import io.sentry.buddy.flow.FlowAnalysisResponse
 
-fun interface TitleGenerator {
-    suspend fun generateTitle(request: FlowAnalysisRequest): String
-}
+class TitleEnrichment : Enrichment {
 
-class ClaudeCliTitleGenerator : TitleGenerator {
+    override suspend fun enrich(request: FlowAnalysisRequest, response: FlowAnalysisResponse): FlowAnalysisResponse =
+        response.copy(title = generateTitle(request))
 
-    override suspend fun generateTitle(request: FlowAnalysisRequest): String {
+    private fun generateTitle(request: FlowAnalysisRequest): String {
         val prompt = buildString {
             appendLine("In one short sentence (max 12 words), summarize what happened in this user")
             appendLine("session, based on the user's own description and the raw event log. Respond")

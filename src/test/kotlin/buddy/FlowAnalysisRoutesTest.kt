@@ -11,10 +11,10 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.install
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.testing.testApplication
+import io.sentry.buddy.flow.Enrichment
 import io.sentry.buddy.flow.FlowAnalysisService
 import io.sentry.buddy.flow.FlowAnalysisStore
 import io.sentry.buddy.flow.flowAnalysisRoutes
-import io.sentry.buddy.tooling.TitleGenerator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.json.Json
@@ -40,7 +40,7 @@ class FlowAnalysisRoutesTest {
 
     private fun newTestService() = FlowAnalysisService(
         store = FlowAnalysisStore(createTempDirectory("flow-routes-test").toFile()),
-        titleGenerator = TitleGenerator { "Test title" },
+        enrichments = listOf(Enrichment { _, response -> response.copy(title = "Test title") }),
         scope = CoroutineScope(Dispatchers.Unconfined)
     )
 

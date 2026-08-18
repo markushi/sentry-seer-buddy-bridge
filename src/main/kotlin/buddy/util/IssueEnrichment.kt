@@ -8,8 +8,9 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.serialization.kotlinx.json.json
+import io.sentry.buddy.flow.Enrichment
 import io.sentry.buddy.flow.FlowAnalysisRequest
-import io.sentry.buddy.flow.IssueFetcher
+import io.sentry.buddy.flow.FlowAnalysisResponse
 import io.sentry.buddy.flow.SentryIssue
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -26,15 +27,18 @@ private data class SentryEventDto(
     val permalink: String? = null
 )
 
-class SentryApiClient(
+class IssueEnrichment(
     private val authToken: String,
     private val httpClient: HttpClient = HttpClient(CIO) { install(ContentNegotiation) { json() } },
     private val baseUrl: String = "https://sentry.io"
-) : IssueFetcher {
+) : Enrichment {
 
-    private val logger = LoggerFactory.getLogger(SentryApiClient::class.java)
+    private val logger = LoggerFactory.getLogger(IssueEnrichment::class.java)
 
-    override suspend fun fetchIssues(request: FlowAnalysisRequest): List<SentryIssue> {
+    override suspend fun enrich(request: FlowAnalysisRequest, response: FlowAnalysisResponse): FlowAnalysisResponse =
+        response.copy(issues = fetchIssues(request))
+
+    internal suspend fun fetchIssues(request: FlowAnalysisRequest): List<SentryIssue> {
         val org = organizationSlugFrom(request.dsn) ?: return emptyList()
 
         val events = try {

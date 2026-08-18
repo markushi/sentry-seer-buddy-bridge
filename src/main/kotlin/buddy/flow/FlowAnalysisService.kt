@@ -1,6 +1,5 @@
 package io.sentry.buddy.flow
 
-import io.sentry.buddy.tooling.TitleGenerator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -15,9 +14,7 @@ sealed class ResolveOutcome {
 
 class FlowAnalysisService(
     private val store: FlowAnalysisStore,
-    private val issueFetcher: IssueFetcher = NoOpIssueFetcher,
-    private val recommendationEngine: RecommendationEngine = NoOpRecommendationEngine,
-    private val titleGenerator: TitleGenerator,
+    private val enrichments: List<Enrichment> = emptyList(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 ) {
 
@@ -52,16 +49,9 @@ class FlowAnalysisService(
 
     private suspend fun runPipeline(request: FlowAnalysisRequest) {
         val result = try {
-            val issues = issueFetcher.fetchIssues(request)
-            val recommendations = recommendationEngine.generateRecommendations(request, issues)
-            val title = titleGenerator.generateTitle(request)
-            FlowAnalysisResponse(
-                flowId = request.flowId,
-                status = AnalysisStatus.COMPLETED,
-                title = title,
-                recommendations = recommendations,
-                issues = issues
-            )
+            val initial = FlowAnalysisResponse(flowId = request.flowId, status = AnalysisStatus.PROCESSING)
+            val enriched = enrichments.fold(initial) { response, enrichment -> enrichment.enrich(request, response) }
+            enriched.copy(status = AnalysisStatus.COMPLETED)
         } catch (e: Exception) {
             FlowAnalysisResponse(
                 flowId = request.flowId,
