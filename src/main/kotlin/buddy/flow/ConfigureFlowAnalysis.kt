@@ -1,9 +1,9 @@
 package io.sentry.buddy.flow
 
 import io.ktor.server.application.Application
-import io.sentry.buddy.tooling.ClaudeCliTitleGenerator
-import io.sentry.buddy.tooling.SdkUpgradeRecommendationSource
-import io.sentry.buddy.tooling.SentryApiClient
+import io.sentry.buddy.tooling.IssueEnrichment
+import io.sentry.buddy.tooling.SdkUpgradeEnrichment
+import io.sentry.buddy.tooling.TitleEnrichment
 import java.io.File
 
 fun Application.configureFlowAnalysis(
@@ -11,12 +11,13 @@ fun Application.configureFlowAnalysis(
         store = FlowAnalysisStore(
             File(environment.config.propertyOrNull("flowAnalysis.dataDir")?.getString() ?: "data/flow-analysis")
         ),
-        issueFetcher = System.getenv("SENTRY_AUTH_TOKEN")
-            ?.takeIf { it.isNotBlank() }
-            ?.let { token -> SentryApiClient(authToken = token) }
-            ?: NoOpIssueFetcher,
-        recommendationEngine = CompositeRecommendationEngine(listOf(SdkUpgradeRecommendationSource())),
-        titleGenerator = ClaudeCliTitleGenerator()
+        enrichments = listOfNotNull(
+            System.getenv("SENTRY_AUTH_TOKEN")
+                ?.takeIf { it.isNotBlank() }
+                ?.let { token -> IssueEnrichment(authToken = token) },
+            SdkUpgradeEnrichment(),
+            TitleEnrichment()
+        )
     )
 ) {
     flowAnalysisRoutes(flowAnalysisService)
