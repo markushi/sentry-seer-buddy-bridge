@@ -1,8 +1,5 @@
-package io.sentry.buddy
+package io.sentry.buddy.flow
 
-import io.sentry.buddy.flow.AnalysisStatus
-import io.sentry.buddy.flow.FlowAnalysisRequest
-import io.sentry.buddy.flow.FlowAnalysisResponse
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -1,9 +1,9 @@
 package io.sentry.buddy.flow
 
-import io.ktor.server.application.Application
-import io.sentry.buddy.tooling.IssueEnrichment
-import io.sentry.buddy.tooling.SdkUpgradeEnrichment
-import io.sentry.buddy.tooling.TitleEnrichment
+import io.ktor.server.application.*
+import io.sentry.buddy.enrichment.IssueEnrichment
+import io.sentry.buddy.enrichment.SdkUpgradeEnrichment
+import io.sentry.buddy.enrichment.TitleEnrichment
 import java.io.File
 
 fun Application.configureFlowAnalysis(

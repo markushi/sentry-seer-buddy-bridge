@@ -1,6 +1,5 @@
-package io.sentry.buddy.tooling
+package io.sentry.buddy.enrichment
 
-import io.sentry.buddy.flow.Enrichment
 import io.sentry.buddy.flow.FlowAnalysisRequest
 import io.sentry.buddy.flow.FlowAnalysisResponse
 

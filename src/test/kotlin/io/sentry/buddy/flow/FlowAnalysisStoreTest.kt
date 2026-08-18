@@ -1,10 +1,5 @@
-package io.sentry.buddy
+package io.sentry.buddy.flow
 
-import io.sentry.buddy.flow.AnalysisStatus
-import io.sentry.buddy.flow.FlowAnalysisEvent
-import io.sentry.buddy.flow.FlowAnalysisRequest
-import io.sentry.buddy.flow.FlowAnalysisResponse
-import io.sentry.buddy.flow.FlowAnalysisStore
 import kotlinx.serialization.json.JsonObject
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test

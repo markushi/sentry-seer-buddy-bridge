@@ -1,14 +1,11 @@
-package io.sentry.buddy.tooling
+package io.sentry.buddy.enrichment
 
-import io.ktor.client.HttpClient
-import io.ktor.client.call.body
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.request.get
-import io.ktor.client.request.header
-import io.ktor.client.request.parameter
-import io.ktor.serialization.kotlinx.json.json
-import io.sentry.buddy.flow.Enrichment
+import io.ktor.client.*
+import io.ktor.client.call.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.request.*
+import io.ktor.serialization.kotlinx.json.*
 import io.sentry.buddy.flow.FlowAnalysisRequest
 import io.sentry.buddy.flow.FlowAnalysisResponse
 import io.sentry.buddy.flow.SentryIssue

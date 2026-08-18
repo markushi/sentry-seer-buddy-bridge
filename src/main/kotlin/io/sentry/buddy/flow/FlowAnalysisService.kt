@@ -1,5 +1,6 @@
 package io.sentry.buddy.flow
 
+import io.sentry.buddy.enrichment.Enrichment
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
