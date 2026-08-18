@@ -6,6 +6,7 @@ import io.sentry.buddy.Recommendation
 import io.sentry.buddy.Severity
 import io.sentry.buddy.seer.SeerClient
 import io.sentry.buddy.seer.SeerPrompts
+import io.sentry.buddy.seer.seerJson
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -74,7 +75,7 @@ internal fun parseRecommendations(output: String, json: Json): List<Recommendati
 
 class SeerRecommendationEnrichment(
     private val seerClient: SeerClient,
-    private val json: Json = Json { ignoreUnknownKeys = true }
+    private val json: Json = seerJson
 ) : Enrichment {
 
     override suspend fun enrich(request: FlowAnalysisRequest, response: FlowAnalysisResponse): FlowAnalysisResponse {
