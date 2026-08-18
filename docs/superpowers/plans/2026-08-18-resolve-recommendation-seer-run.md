@@ -501,20 +501,51 @@ In `src/test/kotlin/io/sentry/buddy/enrichment/SeerRecommendationEnrichmentTest.
 The other seven tests do not change: `parseRecommendations` keeps its signature, and the
 enrichment behavior through the client is the same.
 
-- [ ] **Step 7: Run the whole suite**
+- [ ] **Step 7: Keep `ConfigureFlowAnalysis` compiling**
+
+The new enrichment constructor breaks the present call
+`SeerRecommendationEnrichment(authToken = token)`. In
+`src/main/kotlin/io/sentry/buddy/endpoints/flow/ConfigureFlowAnalysis.kt`, add the import
+`io.sentry.buddy.seer.SeerClient` and replace the `enrichments = buildList { ... }` block with:
+
+```kotlin
+        enrichments = buildList {
+            val token = System.getenv("SENTRY_AUTH_TOKEN")?.takeIf { it.isNotBlank() }
+            val org = System.getenv("SENTRY_ORG")?.takeIf { it.isNotBlank() }
+            if (token != null) add(IssueEnrichment(authToken = token))
+            if (token != null && org != null) {
+                add(
+                    SeerRecommendationEnrichment(
+                        SeerClient(
+                            authToken = token,
+                            org = org,
+                            projectId = System.getenv("SENTRY_PROJECT_ID")?.takeIf { it.isNotBlank() }
+                        )
+                    )
+                )
+            }
+            add(SdkUpgradeEnrichment())
+            add(TitleEnrichment())
+        }
+```
+
+Task 5 tidies this file; here it only has to compile and keep the behavior.
+
+- [ ] **Step 8: Run the whole suite**
 
 Run: `./gradlew test`
 Expected: BUILD FAILED with exactly one failure, the pre-existing
 `OpenUrlValidatorTest > rejects a subdomain of sentry_io`. Every other test passes. If any other
 test fails, repair it before you continue.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add src/main/kotlin/io/sentry/buddy/seer/SeerClient.kt \
         src/test/kotlin/io/sentry/buddy/seer/SeerClientTest.kt \
         src/main/kotlin/io/sentry/buddy/enrichment/SeerRecommendationEnrichment.kt \
-        src/test/kotlin/io/sentry/buddy/enrichment/SeerRecommendationEnrichmentTest.kt
+        src/test/kotlin/io/sentry/buddy/enrichment/SeerRecommendationEnrichmentTest.kt \
+        src/main/kotlin/io/sentry/buddy/endpoints/flow/ConfigureFlowAnalysis.kt
 git commit -m "refactor(seer): extract SeerClient with the run id, the org and the run url"
 ```
 
@@ -585,7 +616,10 @@ class SeerPromptsTest {
     fun `analysis carries the instructions and the flow context`() {
         val prompt = SeerPrompts.analysis(request(), listOf(issue))
 
-        assertTrue(prompt.contains("Respond with"), "the analysis instructions are missing")
+        assertTrue(
+            prompt.contains("Analyze the flow and make improvement recommendations."),
+            "the analysis instructions are missing"
+        )
         assertTrue(prompt.contains("tapped checkout twice"))
         assertTrue(prompt.contains("io.sentry.android@8.40.0"))
         assertTrue(prompt.contains("NPE in checkout"))
@@ -759,9 +793,8 @@ git commit -m "feat(seer): add the implement prompt and share the flow context b
 - [ ] **Step 1: Write the failing model test**
 
 Add these two tests to the existing class in `src/test/kotlin/io/sentry/buddy/ModelsTest.kt`. Keep
-the existing tests and the existing imports; add what the compiler asks for
-(`io.sentry.buddy.Recommendation`, `kotlinx.serialization.json.Json`, `kotlin.test.assertEquals`,
-`kotlin.test.assertTrue` — only those that are not there already).
+the existing tests. The file is in the package `io.sentry.buddy` and already imports `Json`, `Test`
+and `assertEquals`; add only `import kotlin.test.assertTrue`.
 
 ```kotlin
     @Test
