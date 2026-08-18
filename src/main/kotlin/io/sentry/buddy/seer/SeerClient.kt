@@ -67,9 +67,22 @@ private data class SeerSession(
 
 @Serializable
 private data class SeerBlock(
-    val message: String? = null,
+    val message: SeerMessage? = null,
     val loading: Boolean = false
 )
+
+/**
+ * The `message` of a block is an object, not a string: the real answer carries `role`, `content`,
+ * `thinking_content`, `tool_calls` and `metadata`. Only `role` and `content` are read here.
+ */
+@Serializable
+private data class SeerMessage(
+    val role: String? = null,
+    val content: String? = null
+)
+
+/** The role of the block that only echoes the prompt back. It is never the answer. */
+private const val ROLE_USER = "user"
 
 class SeerClient(
     private val authToken: String,
@@ -101,9 +114,10 @@ class SeerClient(
     }
 
     /**
-     * Polls the run and gives the message of the last block that is not loading and carries a
-     * message. A block can hold only `tool_results`, `file_patches` or `todos` (contract section 5),
-     * thus the last block of a completed run is not necessarily the one with the answer.
+     * Polls the run and gives the content of the last block that is not loading, does not come
+     * from the user, and carries content. The first block echoes the prompt back with the role
+     * `user`, and a block can hold only `tool_results`, `file_patches` or `todos` (contract
+     * section 5), thus the last block of a completed run is not necessarily the one with the answer.
      */
     suspend fun awaitAnswer(runId: Long): String {
         val answer = withTimeoutOrNull(timeoutMs) {
@@ -113,8 +127,8 @@ class SeerClient(
                 when (session?.status) {
                     "completed" ->
                         return@withTimeoutOrNull session.blocks.lastOrNull {
-                            !it.loading && !it.message.isNullOrBlank()
-                        }?.message
+                            !it.loading && it.message?.role != ROLE_USER && !it.message?.content.isNullOrBlank()
+                        }?.message?.content
                             ?: throw IllegalStateException("The Seer run $runId completed with no answer block")
 
                     "error" -> throw IllegalStateException("The Seer run $runId ended with the status error")

@@ -39,7 +39,7 @@ private fun defaultFlowAnalysisService(dataDir: File): FlowAnalysisService {
     return FlowAnalysisService(
         store = FlowAnalysisStore(dataDir),
         enrichments = buildList {
-            if (authToken != null) add(IssueEnrichment(authToken = authToken))
+            if (authToken != null) add(IssueEnrichment(authToken = authToken, org = org))
             if (seerClient != null) add(SeerRecommendationEnrichment(seerClient))
             add(SdkUpgradeEnrichment())
             add(TitleEnrichment())

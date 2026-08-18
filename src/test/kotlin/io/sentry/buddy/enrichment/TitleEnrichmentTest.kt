@@ -8,6 +8,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class TitleEnrichmentTest {
 
@@ -50,5 +52,46 @@ class TitleEnrichmentTest {
         val enriched = enrichment.enrich(sampleRequest("Flow: \nFocus areas: Network timing"), emptyResponse())
 
         assertEquals("Untitled flow", enriched.title)
+    }
+
+    @Test
+    fun `runTitleCommand gives only what the command writes to stdout`() {
+        val title = runTitleCommand(listOf("sh", "-c", "echo 'a warning' >&2; echo 'the title'"))
+
+        assertEquals("the title", title)
+    }
+
+    @Test
+    fun `runTitleCommand does not wait for stdin`() {
+        val title = runTitleCommand(listOf("sh", "-c", "cat; echo 'the title'"))
+
+        assertEquals("the title", title)
+    }
+
+    @Test
+    fun `runTitleCommand throws with the stderr of a command that fails`() {
+        val error = assertFailsWith<IllegalStateException> {
+            runTitleCommand(listOf("sh", "-c", "echo 'boom' >&2; exit 3"))
+        }
+
+        assertTrue(error.message!!.contains("3"), error.message!!)
+        assertTrue(error.message!!.contains("boom"), error.message!!)
+    }
+
+    @Test
+    fun `runTitleCommand stops a command that runs longer than the timeout`() {
+        val started = System.currentTimeMillis()
+
+        val error = assertFailsWith<IllegalStateException> {
+            runTitleCommand(listOf("sh", "-c", "sleep 60; echo 'too late'"), timeoutMs = 200L)
+        }
+
+        assertTrue(error.message!!.contains("200 ms"), error.message!!)
+        assertTrue(System.currentTimeMillis() - started < 10_000L, "it waited for the command to end")
+    }
+
+    @Test
+    fun `claudeTitleCommand asks claude for the faster haiku model`() {
+        assertEquals(listOf("claude", "--model", "haiku", "-p", "the prompt"), claudeTitleCommand("the prompt"))
     }
 }

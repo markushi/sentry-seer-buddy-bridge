@@ -164,8 +164,8 @@ class SeerRecommendationEnrichmentTest {
             """{"run_id": 42, "sentry_run_id": "uuid"}""" to HttpStatusCode.OK,
             """{"session": {"run_id": 42, "status": "processing", "blocks": []}}""" to HttpStatusCode.OK,
             """{"session": {"run_id": 42, "status": "completed", "blocks": [
-                 {"id": "b1", "message": "thinking", "loading": true},
-                 {"id": "b2", "message": "[{\"title\": \"T\", \"description\": \"D\", \"severity\": \"LOW\"}]", "loading": false}
+                 {"id": "b1", "message": {"role": "assistant", "content": "thinking"}, "loading": true},
+                 {"id": "b2", "message": {"role": "assistant", "content": "[{\"title\": \"T\", \"description\": \"D\", \"severity\": \"LOW\"}]"}, "loading": false}
                ]}}""" to HttpStatusCode.OK
         )
 
@@ -181,7 +181,7 @@ class SeerRecommendationEnrichmentTest {
             """{"run_id": 42, "sentry_run_id": "uuid"}""" to HttpStatusCode.OK,
             """{"detail": "This run is still being created; retry shortly."}""" to HttpStatusCode.Conflict,
             """{"session": {"run_id": 42, "status": "completed", "blocks": [
-                 {"id": "b1", "message": "[]", "loading": false}
+                 {"id": "b1", "message": {"role": "assistant", "content": "[]"}, "loading": false}
                ]}}""" to HttpStatusCode.OK
         )
 
@@ -220,7 +220,7 @@ class SeerRecommendationEnrichmentTest {
         val client = clientOf(
             """{"run_id": 42, "sentry_run_id": "uuid"}""" to HttpStatusCode.OK,
             """{"session": {"run_id": 42, "status": "completed", "blocks": [
-                 {"id": "b1", "message": "Sure, here are some recommendations: not json", "loading": false}
+                 {"id": "b1", "message": {"role": "assistant", "content": "Sure, here are some recommendations: not json"}, "loading": false}
                ]}}""" to HttpStatusCode.OK
         )
 

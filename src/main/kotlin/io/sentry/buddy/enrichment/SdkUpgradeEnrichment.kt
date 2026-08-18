@@ -29,7 +29,8 @@ class SdkUpgradeEnrichment(
         val currentVersion = parseSdkVersion(request.sdk) ?: return response
         val latestVersion = fetchLatestReleaseVersion() ?: return response
 
-        if (!isOutdated(current = currentVersion, latest = latestVersion)) return response
+        // commented out for local testing
+        // if (!isOutdated(current = currentVersion, latest = latestVersion)) return response
 
         val recommendation = Recommendation(
             id = UUID.randomUUID().toString(),

@@ -85,8 +85,8 @@ class SeerClientTest {
             clientOf(
                 """{"session": {"run_id": 42, "status": "processing", "blocks": []}}""" to HttpStatusCode.OK,
                 """{"session": {"run_id": 42, "status": "completed", "blocks": [
-                     {"id": "b1", "message": "thinking", "loading": true},
-                     {"id": "b2", "message": "the answer", "loading": false}
+                     {"id": "b1", "message": {"role": "assistant", "content": "thinking"}, "loading": true},
+                     {"id": "b2", "message": {"role": "assistant", "content": "the answer"}, "loading": false}
                    ]}}""" to HttpStatusCode.OK
             )
         )
@@ -100,7 +100,7 @@ class SeerClientTest {
             clientOf(
                 """{"detail": "This run is still being created; retry shortly."}""" to HttpStatusCode.Conflict,
                 """{"session": {"run_id": 42, "status": "completed", "blocks": [
-                     {"id": "b1", "message": "the answer", "loading": false}
+                     {"id": "b1", "message": {"role": "assistant", "content": "the answer"}, "loading": false}
                    ]}}""" to HttpStatusCode.OK
             )
         )
@@ -113,9 +113,9 @@ class SeerClientTest {
         val client = seerClient(
             clientOf(
                 """{"session": {"run_id": 42, "status": "completed", "blocks": [
-                     {"id": "b1", "message": "the answer", "loading": false},
+                     {"id": "b1", "message": {"role": "assistant", "content": "the answer"}, "loading": false},
                      {"id": "b2", "message": null, "loading": false, "tool_results": [{"name": "grep"}]},
-                     {"id": "b3", "message": "   ", "loading": false, "todos": []}
+                     {"id": "b3", "message": {"role": "assistant", "content": "   "}, "loading": false, "todos": []}
                    ]}}""" to HttpStatusCode.OK
             )
         )
@@ -129,7 +129,7 @@ class SeerClientTest {
             clientOf(
                 """{"detail": "Rate limit exceeded"}""" to HttpStatusCode.TooManyRequests,
                 """{"session": {"run_id": 42, "status": "completed", "blocks": [
-                     {"id": "b1", "message": "the answer", "loading": false}
+                     {"id": "b1", "message": {"role": "assistant", "content": "the answer"}, "loading": false}
                    ]}}""" to HttpStatusCode.OK
             )
         )
@@ -174,7 +174,7 @@ class SeerClientTest {
                     "blocks": [
                       {
                         "id": "b1",
-                        "message": "the answer",
+                        "message": {"role": "assistant", "content": "the answer"},
                         "loading": false,
                         "timestamp": "2026-08-18T09:12:05Z",
                         "artifacts": [],
@@ -189,6 +189,36 @@ class SeerClientTest {
                   }
                 }
                 """.trimIndent() to HttpStatusCode.OK
+            )
+        )
+
+        assertEquals("the answer", client.awaitAnswer(42L))
+    }
+
+    @Test
+    fun `awaitAnswer reads the content of the real message object`() = runBlocking {
+        val client = seerClient(
+            clientOf(
+                """{"session": {"run_id": 42, "status": "completed", "blocks": [
+                     {"id": "b1", "loading": false, "message": {
+                        "role": "assistant", "content": "the answer",
+                        "thinking_content": null, "tool_calls": null, "metadata": null}}
+                   ]}}""" to HttpStatusCode.OK
+            )
+        )
+
+        assertEquals("the answer", client.awaitAnswer(42L))
+    }
+
+    @Test
+    fun `awaitAnswer ignores the user block that echoes the prompt back`() = runBlocking {
+        val client = seerClient(
+            clientOf(
+                """{"session": {"run_id": 42, "status": "completed", "blocks": [
+                     {"id": "b1", "loading": false, "message": {"role": "user", "content": "the prompt"}},
+                     {"id": "b2", "loading": false, "message": {"role": "assistant", "content": "the answer"}},
+                     {"id": "b3", "loading": false, "message": {"role": "user", "content": "a later prompt"}}
+                   ]}}""" to HttpStatusCode.OK
             )
         )
 
