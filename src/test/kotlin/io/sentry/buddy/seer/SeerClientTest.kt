@@ -15,11 +15,13 @@ import kotlin.test.assertTrue
 class SeerClientTest {
 
     private val requestedUrls = mutableListOf<String>()
+    private val requestBodies = mutableListOf<String>()
 
     private fun clientOf(vararg responses: Pair<String, HttpStatusCode>): HttpClient {
         var index = 0
         val engine = MockEngine { request ->
             requestedUrls += request.url.toString()
+            requestBodies += request.body.toByteArray().decodeToString()
             val (body, status) = responses[minOf(index++, responses.size - 1)]
             respond(
                 content = ByteReadChannel(body),
@@ -32,11 +34,16 @@ class SeerClientTest {
         return HttpClient(engine) { install(ContentNegotiation) { json(seerJson) } }
     }
 
-    private fun seerClient(httpClient: HttpClient, projectId: String? = "5428559") = SeerClient(
+    private fun seerClient(
+        httpClient: HttpClient,
+        projectId: String? = "5428559",
+        baseUrl: String = "https://sentry.io"
+    ) = SeerClient(
         authToken = "token",
         org = "sentry-sdks",
         projectId = projectId,
         httpClient = httpClient,
+        baseUrl = baseUrl,
         pollIntervalMs = 1L,
         timeoutMs = 1000L
     )
@@ -50,6 +57,17 @@ class SeerClientTest {
         assertEquals(42L, run.runId)
         assertEquals("3f2c-uuid", run.sentryRunId)
         assertEquals("https://sentry.io/api/0/organizations/sentry-sdks/seer/explorer-chat/", requestedUrls.single())
+    }
+
+    @Test
+    fun `startRun sends the flow analysis page name by default and the given one otherwise`() = runBlocking {
+        val client = seerClient(clientOf("""{"run_id": 42, "sentry_run_id": "uuid"}""" to HttpStatusCode.OK))
+
+        client.startRun("analyze this")
+        client.startRun("implement this", pageName = PAGE_NAME_FLOW_IMPLEMENT)
+
+        assertTrue(requestBodies[0].contains("\"page_name\":\"external:flow-analysis\""), requestBodies[0])
+        assertTrue(requestBodies[1].contains("\"page_name\":\"external:flow-implement\""), requestBodies[1])
     }
 
     @Test
@@ -81,6 +99,35 @@ class SeerClientTest {
         val client = seerClient(
             clientOf(
                 """{"detail": "This run is still being created; retry shortly."}""" to HttpStatusCode.Conflict,
+                """{"session": {"run_id": 42, "status": "completed", "blocks": [
+                     {"id": "b1", "message": "the answer", "loading": false}
+                   ]}}""" to HttpStatusCode.OK
+            )
+        )
+
+        assertEquals("the answer", client.awaitAnswer(42L))
+    }
+
+    @Test
+    fun `awaitAnswer skips a trailing block that carries no message`() = runBlocking {
+        val client = seerClient(
+            clientOf(
+                """{"session": {"run_id": 42, "status": "completed", "blocks": [
+                     {"id": "b1", "message": "the answer", "loading": false},
+                     {"id": "b2", "message": null, "loading": false, "tool_results": [{"name": "grep"}]},
+                     {"id": "b3", "message": "   ", "loading": false, "todos": []}
+                   ]}}""" to HttpStatusCode.OK
+            )
+        )
+
+        assertEquals("the answer", client.awaitAnswer(42L))
+    }
+
+    @Test
+    fun `awaitAnswer retries a rate limited poll instead of failing`() = runBlocking {
+        val client = seerClient(
+            clientOf(
+                """{"detail": "Rate limit exceeded"}""" to HttpStatusCode.TooManyRequests,
                 """{"session": {"run_id": 42, "status": "completed", "blocks": [
                      {"id": "b1", "message": "the answer", "loading": false}
                    ]}}""" to HttpStatusCode.OK
@@ -154,6 +201,16 @@ class SeerClientTest {
 
         assertEquals(
             "https://sentry-sdks.sentry.io/issues/?project=5428559&statsPeriod=10m&explorerRunId=3f2c-uuid",
+            client.runUrl("3f2c-uuid")
+        )
+    }
+
+    @Test
+    fun `runUrl takes its host from the base url`() {
+        val client = seerClient(clientOf("{}" to HttpStatusCode.OK), baseUrl = "https://sentry.example.com")
+
+        assertEquals(
+            "https://sentry-sdks.sentry.example.com/issues/?project=5428559&statsPeriod=10m&explorerRunId=3f2c-uuid",
             client.runUrl("3f2c-uuid")
         )
     }
