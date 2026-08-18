@@ -11,6 +11,7 @@ import io.sentry.buddy.flow.FlowAnalysisResponse
 import io.sentry.buddy.flow.Recommendation
 import io.sentry.buddy.flow.Severity
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.util.*
 
@@ -18,7 +19,7 @@ import java.util.*
 private data class GithubReleaseDto(val tag_name: String)
 
 class SdkUpgradeEnrichment(
-    private val httpClient: HttpClient = HttpClient(CIO) { install(ContentNegotiation) { json() } },
+    private val httpClient: HttpClient = HttpClient(CIO) { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } },
     private val releasesUrl: String = "https://api.github.com/repos/getsentry/sentry-java/releases/latest"
 ) : Enrichment {
 

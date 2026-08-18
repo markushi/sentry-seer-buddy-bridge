@@ -8,6 +8,7 @@ import io.ktor.serialization.kotlinx.json.*
 import io.sentry.buddy.flow.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -30,12 +31,12 @@ class SdkUpgradeEnrichmentTest {
     private fun mockClient(tagName: String): HttpClient {
         val mockEngine = MockEngine { _ ->
             respond(
-                content = """{"tag_name": "$tagName"}""",
+                content = """{"url": "https://api.github.com/releases/1", "tag_name": "$tagName"}""",
                 status = HttpStatusCode.OK,
                 headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
             )
         }
-        return HttpClient(mockEngine) { install(ContentNegotiation) { json() } }
+        return HttpClient(mockEngine) { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } }
     }
 
     @Test
