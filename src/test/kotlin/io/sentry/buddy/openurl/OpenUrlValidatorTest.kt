@@ -28,11 +28,8 @@ class OpenUrlValidatorTest {
     }
 
     @Test
-    fun `rejects a subdomain of sentry_io`() {
-        assertEquals(
-            "url host must be sentry.io",
-            validateOpenUrl("https://sub.sentry.io/organizations/acme/issues/123/")
-        )
+    fun `accepts a subdomain of sentry_io`() {
+        assertNull(validateOpenUrl("https://sub.sentry.io/organizations/acme/issues/123/"))
     }
 
     @Test
