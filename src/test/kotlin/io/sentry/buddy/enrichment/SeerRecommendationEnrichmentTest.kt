@@ -13,6 +13,7 @@ import io.sentry.buddy.FlowAnalysisResponse
 import io.sentry.buddy.RecommendationStatus
 import io.sentry.buddy.SentryIssue
 import io.sentry.buddy.Severity
+import io.sentry.buddy.seer.SeerClient
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -57,11 +58,14 @@ class SeerRecommendationEnrichmentTest {
     }
 
     private fun enrichmentWith(client: HttpClient) = SeerRecommendationEnrichment(
-        authToken = "token",
-        httpClient = client,
-        baseUrl = "https://sentry.io",
-        pollIntervalMs = 1L,
-        timeoutMs = 1000L,
+        seerClient = SeerClient(
+            authToken = "token",
+            org = "sentry-sdks",
+            projectId = "5428559",
+            httpClient = client,
+            pollIntervalMs = 1L,
+            timeoutMs = 1000L
+        ),
         json = json
     )
 
@@ -170,15 +174,5 @@ class SeerRecommendationEnrichmentTest {
             enrichmentWith(client).enrich(sampleRequest(), sampleResponse())
         }
         Unit
-    }
-
-    @Test
-    fun `enrich returns the response unchanged when the dsn has no organization`() = runBlocking {
-        val client = clientOf("""{"run_id": 42}""" to HttpStatusCode.OK)
-
-        val response = sampleResponse()
-        val result = enrichmentWith(client).enrich(sampleRequest().copy(dsn = "not a url"), response)
-
-        assertEquals(response, result)
     }
 }
