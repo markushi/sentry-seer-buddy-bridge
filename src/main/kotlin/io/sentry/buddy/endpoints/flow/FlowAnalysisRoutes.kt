@@ -35,27 +35,51 @@ fun Application.flowAnalysisRoutes(flowAnalysisService: FlowAnalysisService) {
                 call.respond(analysis)
             }
 
-            post("/{flowId}/recommendations/{recommendationId}/resolve") {
+            post("/{flowId}/recommendations/{recommendationId}/dismiss") {
                 val flowId = call.parameters["flowId"] ?: ""
                 validateFlowId(flowId)?.let {
                     return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to it))
                 }
                 val recommendationId = call.parameters["recommendationId"]!!
 
-                when (val outcome = flowAnalysisService.resolveRecommendation(flowId, recommendationId)) {
-                    is ResolveOutcome.Success -> call.respond(outcome.recommendation)
-                    ResolveOutcome.FlowAnalysisNotFound ->
+                when (val outcome = flowAnalysisService.dismissRecommendation(flowId, recommendationId)) {
+                    is DismissOutcome.Success -> call.respond(outcome.recommendation)
+                    DismissOutcome.FlowAnalysisNotFound ->
                         call.respond(HttpStatusCode.NotFound, mapOf("error" to "flow not found"))
 
-                    ResolveOutcome.RecommendationNotFound ->
+                    DismissOutcome.RecommendationNotFound ->
+                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "recommendation not found"))
+                }
+            }
+
+            post("/{flowId}/recommendations/{recommendationId}/actions/{actionId}/execute") {
+                val flowId = call.parameters["flowId"] ?: ""
+                validateFlowId(flowId)?.let {
+                    return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to it))
+                }
+                val recommendationId = call.parameters["recommendationId"]!!
+                val actionId = call.parameters["actionId"]!!
+
+                when (val outcome = flowAnalysisService.executeAction(flowId, recommendationId, actionId)) {
+                    is ExecuteActionOutcome.Success -> call.respond(outcome.action)
+                    ExecuteActionOutcome.FlowAnalysisNotFound ->
+                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "flow not found"))
+
+                    ExecuteActionOutcome.RecommendationNotFound ->
                         call.respond(HttpStatusCode.NotFound, mapOf("error" to "recommendation not found"))
 
-                    ResolveOutcome.NotResolvable ->
-                        call.respond(HttpStatusCode.Conflict, mapOf("error" to "recommendation is not resolvable"))
+                    ExecuteActionOutcome.ActionNotFound ->
+                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "action not found"))
+
+                    ExecuteActionOutcome.RecommendationDismissed ->
+                        call.respond(
+                            HttpStatusCode.Conflict,
+                            mapOf("error" to "the recommendation is dismissed")
+                        )
 
                     // The detail of the failure names organization flags and access-gate state, so it
                     // belongs in the log (the service writes it) and not in the answer.
-                    is ResolveOutcome.SeerStartFailed ->
+                    is ExecuteActionOutcome.SeerStartFailed ->
                         call.respond(HttpStatusCode.BadGateway, mapOf("error" to "could not start the Seer run"))
                 }
             }

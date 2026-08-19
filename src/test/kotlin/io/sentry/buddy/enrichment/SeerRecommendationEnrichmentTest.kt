@@ -10,6 +10,7 @@ import io.sentry.buddy.AnalysisStatus
 import io.sentry.buddy.FlowAnalysisEvent
 import io.sentry.buddy.FlowAnalysisRequest
 import io.sentry.buddy.FlowAnalysisResponse
+import io.sentry.buddy.ActionStatus
 import io.sentry.buddy.RecommendationStatus
 import io.sentry.buddy.SentryIssue
 import io.sentry.buddy.Severity
@@ -74,7 +75,7 @@ class SeerRecommendationEnrichmentTest {
     fun `parseRecommendations maps a well-formed JSON array to Recommendations with fresh ids`() {
         val output = """
             [
-              {"title": "Debounce the checkout button", "description": "It was tapped twice within 200ms.", "severity": "MEDIUM", "resolvable": true},
+              {"title": "Debounce the checkout button", "description": "It was tapped twice within 200ms.", "severity": "MEDIUM"},
               {"title": "Retry failed network request", "description": "The submit call timed out.", "link": "https://docs.sentry.io/retries", "severity": "HIGH"}
             ]
         """.trimIndent()
@@ -88,6 +89,65 @@ class SeerRecommendationEnrichmentTest {
         assertEquals("https://docs.sentry.io/retries", recommendations[1].link)
         assertNotEquals(recommendations[0].id, recommendations[1].id)
         assertTrue(recommendations[0].id.isNotBlank())
+    }
+
+    @Test
+    fun `parseRecommendations maps the actions with fresh ids and an OPEN status`() {
+        val output = """
+            [
+              {
+                "title": "Add OkHttp instrumentation",
+                "description": "No network spans are recorded.",
+                "severity": "HIGH",
+                "actions": [
+                  {"label": "Open a PR", "description": "Add the Sentry OkHttp interceptor."},
+                  {
+                    "label": "Open dashboard",
+                    "description": "Compare against production.",
+                    "link": "https://sentry.io/dashboard/1"
+                  }
+                ]
+              }
+            ]
+        """.trimIndent()
+
+        val actions = parseRecommendations(output, json).single().actions
+
+        assertEquals(listOf("Open a PR", "Open dashboard"), actions.map { it.actionLabel })
+        assertEquals("Add the Sentry OkHttp interceptor.", actions[0].description)
+        assertEquals(null, actions[0].link)
+        assertEquals("https://sentry.io/dashboard/1", actions[1].link)
+        assertEquals(ActionStatus.OPEN, actions[0].status)
+        assertNotEquals(actions[0].id, actions[1].id)
+        assertTrue(actions[0].id.isNotBlank())
+    }
+
+    @Test
+    fun `parseRecommendations gives no actions when the answer has none`() {
+        val output = """[{"title": "T", "description": "D", "severity": "LOW"}]"""
+
+        assertEquals(emptyList(), parseRecommendations(output, json).single().actions)
+    }
+
+    @Test
+    fun `parseRecommendations skips an action that cannot be decoded and keeps its recommendation`() {
+        val output = """
+            [
+              {
+                "title": "T",
+                "description": "D",
+                "actions": [
+                  {"description": "no label at all"},
+                  {"label": "Open a PR", "description": "Do it."}
+                ]
+              }
+            ]
+        """.trimIndent()
+
+        val recommendation = parseRecommendations(output, json).single()
+
+        assertEquals("T", recommendation.title)
+        assertEquals(listOf("Open a PR"), recommendation.actions.map { it.actionLabel })
     }
 
     @Test

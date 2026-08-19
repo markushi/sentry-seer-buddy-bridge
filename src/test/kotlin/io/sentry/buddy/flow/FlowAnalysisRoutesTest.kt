@@ -10,11 +10,13 @@ import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.testing.*
+import io.sentry.buddy.ActionStatus
 import io.sentry.buddy.AnalysisStatus
 import io.sentry.buddy.FlowAnalysisEvent
 import io.sentry.buddy.FlowAnalysisRequest
 import io.sentry.buddy.FlowAnalysisResponse
 import io.sentry.buddy.Recommendation
+import io.sentry.buddy.RecommendationAction
 import io.sentry.buddy.RecommendationStatus
 import io.sentry.buddy.endpoints.flow.FlowAnalysisService
 import io.sentry.buddy.endpoints.flow.FlowAnalysisStore
@@ -157,26 +159,35 @@ class FlowAnalysisRoutesTest {
         assertEquals(emptyList(), dataDir.list()!!.toList(), "a read must not create a directory")
     }
 
-    @Test
-    fun `POST resolve answers 502 with a short reason when the Seer run cannot start`() = testApplication {
-        val store = FlowAnalysisStore(createTempDirectory("flow-routes-resolve-fail").toFile())
-        store.saveRequest(
-            FlowAnalysisRequest(
-                flowId = "flow-4",
-                traceIds = listOf("trace-1"),
-                startTimeMs = 1000L,
-                endTimeMs = 2000L,
-                dsn = "https://key@sentry.io/1",
-                userAnnotation = "tapped checkout twice",
-                sdk = "io.sentry.android@8.40.0",
-                events = listOf(FlowAnalysisEvent(type = "click", timestamp = 1500L, data = JsonObject(emptyMap())))
-            )
+    private fun recommendationWithOneAction() = Recommendation(
+        id = "rec-1",
+        title = "T",
+        description = "D",
+        actions = listOf(
+            RecommendationAction(id = "act-1", actionLabel = "Open a PR", description = "Do it.")
         )
+    )
+
+    private fun sampleRequestOf(flowId: String) = FlowAnalysisRequest(
+        flowId = flowId,
+        traceIds = listOf("trace-1"),
+        startTimeMs = 1000L,
+        endTimeMs = 2000L,
+        dsn = "https://key@sentry.io/1",
+        userAnnotation = "tapped checkout twice",
+        sdk = "io.sentry.android@8.40.0",
+        events = listOf(FlowAnalysisEvent(type = "click", timestamp = 1500L, data = JsonObject(emptyMap())))
+    )
+
+    @Test
+    fun `POST execute answers 502 with a short reason when the Seer run cannot start`() = testApplication {
+        val store = FlowAnalysisStore(createTempDirectory("flow-routes-execute-fail").toFile())
+        store.saveRequest(sampleRequestOf("flow-4"))
         store.saveResult(
             FlowAnalysisResponse(
                 flowId = "flow-4",
                 status = AnalysisStatus.COMPLETED,
-                recommendations = listOf(Recommendation(id = "rec-1", title = "T", description = "D"))
+                recommendations = listOf(recommendationWithOneAction())
             )
         )
         val seerClient = SeerClient(
@@ -203,22 +214,24 @@ class FlowAnalysisRoutesTest {
             )
         }
 
-        val response = client.post("/v1/flow-analysis/flow-4/recommendations/rec-1/resolve")
+        val response = client.post("/v1/flow-analysis/flow-4/recommendations/rec-1/actions/act-1/execute")
 
         assertEquals(HttpStatusCode.BadGateway, response.status)
-        val body = response.bodyAsText()
-        assertEquals("""{"error":"could not start the Seer run"}""", body)
-        assertEquals(RecommendationStatus.OPEN, store.loadResult("flow-4")!!.recommendations.single().status)
+        assertEquals("""{"error":"could not start the Seer run"}""", response.bodyAsText())
+        assertEquals(
+            ActionStatus.OPEN,
+            store.loadResult("flow-4")!!.recommendations.single().actions.single().status
+        )
     }
 
     @Test
-    fun `POST resolve answers with the updated recommendation only`() = testApplication {
-        val store = FlowAnalysisStore(createTempDirectory("flow-routes-resolve").toFile())
+    fun `POST execute answers with the updated action only`() = testApplication {
+        val store = FlowAnalysisStore(createTempDirectory("flow-routes-execute").toFile())
         store.saveResult(
             FlowAnalysisResponse(
                 flowId = "flow-3",
                 status = AnalysisStatus.COMPLETED,
-                recommendations = listOf(Recommendation(id = "rec-1", title = "T", description = "D"))
+                recommendations = listOf(recommendationWithOneAction())
             )
         )
         application {
@@ -228,12 +241,87 @@ class FlowAnalysisRoutesTest {
             )
         }
 
-        val response = client.post("/v1/flow-analysis/flow-3/recommendations/rec-1/resolve")
+        val response = client.post("/v1/flow-analysis/flow-3/recommendations/rec-1/actions/act-1/execute")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals("\"act-1\"", body["id"].toString())
+        assertEquals("\"EXECUTED\"", body["status"].toString())
+        assertEquals(null, body["flow_id"], "the answer is the action, not the whole analysis")
+    }
+
+    @Test
+    fun `POST execute for an unknown action answers 404`() = testApplication {
+        val store = FlowAnalysisStore(createTempDirectory("flow-routes-execute-404").toFile())
+        store.saveResult(
+            FlowAnalysisResponse(
+                flowId = "flow-5",
+                status = AnalysisStatus.COMPLETED,
+                recommendations = listOf(recommendationWithOneAction())
+            )
+        )
+        application {
+            install(ContentNegotiation) { json() }
+            flowAnalysisRoutes(
+                FlowAnalysisService(store = store, scope = CoroutineScope(Dispatchers.Unconfined))
+            )
+        }
+
+        val response = client.post("/v1/flow-analysis/flow-5/recommendations/rec-1/actions/nope/execute")
+
+        assertEquals(HttpStatusCode.NotFound, response.status)
+        assertEquals("""{"error":"action not found"}""", response.bodyAsText())
+    }
+
+    @Test
+    fun `POST dismiss answers with the dismissed recommendation`() = testApplication {
+        val store = FlowAnalysisStore(createTempDirectory("flow-routes-dismiss").toFile())
+        store.saveResult(
+            FlowAnalysisResponse(
+                flowId = "flow-6",
+                status = AnalysisStatus.COMPLETED,
+                recommendations = listOf(recommendationWithOneAction())
+            )
+        )
+        application {
+            install(ContentNegotiation) { json() }
+            flowAnalysisRoutes(
+                FlowAnalysisService(store = store, scope = CoroutineScope(Dispatchers.Unconfined))
+            )
+        }
+
+        val response = client.post("/v1/flow-analysis/flow-6/recommendations/rec-1/dismiss")
 
         assertEquals(HttpStatusCode.OK, response.status)
         val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
         assertEquals("\"rec-1\"", body["id"].toString())
-        assertEquals("\"RESOLVED\"", body["status"].toString())
-        assertEquals(null, body["flow_id"], "the answer is the recommendation, not the whole analysis")
+        assertEquals("\"DISMISSED\"", body["status"].toString())
+        assertEquals(
+            RecommendationStatus.DISMISSED,
+            store.loadResult("flow-6")!!.recommendations.single().status
+        )
+    }
+
+    @Test
+    fun `POST execute on a dismissed recommendation answers 409`() = testApplication {
+        val store = FlowAnalysisStore(createTempDirectory("flow-routes-execute-409").toFile())
+        store.saveResult(
+            FlowAnalysisResponse(
+                flowId = "flow-7",
+                status = AnalysisStatus.COMPLETED,
+                recommendations = listOf(recommendationWithOneAction().copy(status = RecommendationStatus.DISMISSED))
+            )
+        )
+        application {
+            install(ContentNegotiation) { json() }
+            flowAnalysisRoutes(
+                FlowAnalysisService(store = store, scope = CoroutineScope(Dispatchers.Unconfined))
+            )
+        }
+
+        val response = client.post("/v1/flow-analysis/flow-7/recommendations/rec-1/actions/act-1/execute")
+
+        assertEquals(HttpStatusCode.Conflict, response.status)
+        assertEquals("""{"error":"the recommendation is dismissed"}""", response.bodyAsText())
     }
 }

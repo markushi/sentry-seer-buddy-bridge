@@ -3,12 +3,14 @@ package io.sentry.buddy.enrichment
 import io.sentry.buddy.FlowAnalysisRequest
 import io.sentry.buddy.FlowAnalysisResponse
 import io.sentry.buddy.Recommendation
+import io.sentry.buddy.RecommendationAction
 import io.sentry.buddy.Severity
 import io.sentry.buddy.seer.SeerClient
 import io.sentry.buddy.seer.SeerPrompts
 import io.sentry.buddy.seer.seerJson
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonArray
 import org.slf4j.LoggerFactory
 import java.util.UUID
@@ -21,7 +23,18 @@ private data class SeerRecommendationDto(
     val description: String,
     val link: String? = null,
     val severity: String? = null,
-    val resolvable: Boolean = true
+    /**
+     * Kept as raw elements, so that one action the model wrote without a description does not
+     * discard the recommendation it belongs to.
+     */
+    val actions: List<JsonElement> = emptyList()
+)
+
+@Serializable
+private data class SeerActionDto(
+    val label: String,
+    val description: String,
+    val link: String? = null
 )
 
 /** A model writes `high` as readily as `HIGH`, and sometimes a word that is neither. */
@@ -38,6 +51,22 @@ internal fun extractJsonArray(output: String): String {
     if (start < 0 || end <= start) throw IllegalStateException("No JSON array in the model answer")
     return output.substring(start, end + 1)
 }
+
+private fun parseActions(elements: List<JsonElement>, json: Json): List<RecommendationAction> =
+    elements.mapNotNull { element ->
+        val dto = try {
+            json.decodeFromJsonElement(SeerActionDto.serializer(), element)
+        } catch (e: Exception) {
+            logger.warn("Skipped an action of the Seer answer that could not be decoded", e)
+            return@mapNotNull null
+        }
+        RecommendationAction(
+            id = UUID.randomUUID().toString(),
+            actionLabel = dto.label,
+            description = dto.description,
+            link = dto.link
+        )
+    }
 
 /**
  * Decodes each element on its own, so that one bad element (a severity the enum does not know, a
@@ -63,7 +92,7 @@ internal fun parseRecommendations(output: String, json: Json): List<Recommendati
             description = dto.description,
             link = dto.link,
             severity = severityOf(dto.severity),
-            resolvable = dto.resolvable
+            actions = parseActions(dto.actions, json)
         )
     }
 

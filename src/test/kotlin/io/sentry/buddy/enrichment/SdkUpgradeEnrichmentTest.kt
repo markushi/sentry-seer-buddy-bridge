@@ -11,6 +11,7 @@ import io.sentry.buddy.FlowAnalysisRequest
 import io.sentry.buddy.FlowAnalysisResponse
 import io.sentry.buddy.Recommendation
 import io.sentry.buddy.Severity
+import io.sentry.buddy.sdk.SdkUpgradeAdvisor
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.Json
@@ -33,7 +34,7 @@ class SdkUpgradeEnrichmentTest {
 
     private fun emptyResponse() = FlowAnalysisResponse(flowId = "flow-1", status = AnalysisStatus.PROCESSING)
 
-    private fun mockClient(tagName: String): HttpClient {
+    private fun advisorWithLatestRelease(tagName: String): SdkUpgradeAdvisor {
         val mockEngine = MockEngine { _ ->
             respond(
                 content = """{"url": "https://api.github.com/releases/1", "tag_name": "$tagName"}""",
@@ -41,47 +42,13 @@ class SdkUpgradeEnrichmentTest {
                 headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
             )
         }
-        return HttpClient(mockEngine) { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } }
-    }
-
-    @Test
-    fun `parseSdkVersion extracts the version after the @`() {
-        val enrichment = SdkUpgradeEnrichment()
-
-        assertEquals("8.40.0", enrichment.parseSdkVersion("io.sentry.android@8.40.0"))
-    }
-
-    @Test
-    fun `parseSdkVersion returns null when there is no @`() {
-        val enrichment = SdkUpgradeEnrichment()
-
-        assertEquals(null, enrichment.parseSdkVersion("io.sentry.android"))
-    }
-
-    @Test
-    fun `isOutdated is true when the latest release has a higher version`() {
-        val enrichment = SdkUpgradeEnrichment()
-
-        assertTrue(enrichment.isOutdated(current = "8.40.0", latest = "8.41.0"))
-    }
-
-    @Test
-    fun `isOutdated is false when current already matches latest`() {
-        val enrichment = SdkUpgradeEnrichment()
-
-        assertTrue(!enrichment.isOutdated(current = "8.41.0", latest = "8.41.0"))
-    }
-
-    @Test
-    fun `isOutdated treats missing trailing components as zero`() {
-        val enrichment = SdkUpgradeEnrichment()
-
-        assertTrue(!enrichment.isOutdated(current = "8.41.0", latest = "8.41"))
+        val client = HttpClient(mockEngine) { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } }
+        return SdkUpgradeAdvisor(httpClient = client)
     }
 
     @Test
     fun `enrich appends an upgrade recommendation when outdated`() = runBlocking {
-        val enrichment = SdkUpgradeEnrichment(httpClient = mockClient("8.41.0"))
+        val enrichment = SdkUpgradeEnrichment(advisorWithLatestRelease("8.41.0"))
 
         val enriched = enrichment.enrich(sampleRequest("io.sentry.android@8.40.0"), emptyResponse())
 
@@ -91,7 +58,7 @@ class SdkUpgradeEnrichmentTest {
 
     @Test
     fun `enrich preserves recommendations already on the response`() = runBlocking {
-        val enrichment = SdkUpgradeEnrichment(httpClient = mockClient("8.40.0"))
+        val enrichment = SdkUpgradeEnrichment(advisorWithLatestRelease("8.40.0"))
 
         val existingRecommendation = Recommendation(
             id = "existing-rec",

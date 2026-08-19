@@ -2,6 +2,7 @@ package io.sentry.buddy.seer
 
 import io.sentry.buddy.FlowAnalysisRequest
 import io.sentry.buddy.Recommendation
+import io.sentry.buddy.RecommendationAction
 import io.sentry.buddy.SentryIssue
 
 private const val MAX_EVENTS_IN_PROMPT = 200
@@ -28,18 +29,22 @@ object SeerPrompts {
     fun implement(
         request: FlowAnalysisRequest,
         issues: List<SentryIssue>,
-        recommendation: Recommendation
+        recommendation: Recommendation,
+        action: RecommendationAction
     ): String = buildString {
         appendLine(resource("/flow-implement-prompt.md"))
         appendLine()
-        appendLine("## Recommendation to implement")
+        appendLine("## Action to carry out")
         appendLine()
         appendLine(UNTRUSTED_WARNING)
         appendLine("<recommendation-data>")
-        appendLine("Title: ${fenced(recommendation.title)}")
-        appendLine("Description: ${fenced(recommendation.description)}")
-        recommendation.link?.let { appendLine("Link: ${fenced(it)}") }
+        appendLine("Recommendation title: ${fenced(recommendation.title)}")
+        appendLine("Recommendation description: ${fenced(recommendation.description)}")
+        recommendation.link?.let { appendLine("Recommendation link: ${fenced(it)}") }
         appendLine("Severity: ${recommendation.severity}")
+        appendLine("Action: ${fenced(action.actionLabel)}")
+        appendLine("Action instructions: ${fenced(action.description)}")
+        action.link?.let { appendLine("Action link: ${fenced(it)}") }
         appendLine("</recommendation-data>")
         appendLine()
         append(flowContext(request, issues))

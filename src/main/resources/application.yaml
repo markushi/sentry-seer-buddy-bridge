@@ -6,6 +6,7 @@ ktor:
       - io.sentry.buddy.SerializationKt.configureSerialization
       - io.sentry.buddy.endpoints.flow.ConfigureFlowAnalysisKt.configureFlowAnalysis
       - io.sentry.buddy.endpoints.openurl.ConfigureOpenUrlKt.configureOpenUrl
+      - io.sentry.buddy.endpoints.healthcheck.ConfigureHealthCheckKt.configureHealthCheck
 
 flowAnalysis:
   dataDir: "data/flow-analysis"
