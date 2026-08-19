@@ -95,7 +95,9 @@ class FlowAnalysisRoutesTest {
         assertEquals("\"Test title\"", body.jsonObject["title"].toString())
         val actions = body.jsonObject["actions"]!!.jsonArray
         assertEquals("\"generate-dashboard\"", actions[0].jsonObject["id"].toString())
+        assertEquals("false", actions[0].jsonObject["actionable_for_seer"].toString())
         assertEquals("\"generate-monitors\"", actions[1].jsonObject["id"].toString())
+        assertEquals("false", actions[1].jsonObject["actionable_for_seer"].toString())
         assertEquals("\"share-recording-json\"", actions[2].jsonObject["id"].toString())
     }
 
@@ -273,9 +275,58 @@ class FlowAnalysisRoutesTest {
     @Test
     fun `POST execute flow action answers with the updated action only`() = testApplication {
         val store = FlowAnalysisStore(createTempDirectory("flow-routes-flow-execute").toFile())
+        store.saveRequest(sampleRequestOf("flow-8"))
         store.saveResult(
             FlowAnalysisResponse(
                 flowId = "flow-8",
+                status = AnalysisStatus.COMPLETED,
+                actions = flowActions()
+            )
+        )
+        val seerClient = SeerClient(
+            authToken = "token",
+            org = "sentry-sdks",
+            httpClient = HttpClient(
+                MockEngine { _ ->
+                    respond(
+                        content = """{"run_id": 77, "sentry_run_id": "uuid"}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    )
+                }
+            ) { install(ClientContentNegotiation) { json(seerJson) } }
+        )
+        application {
+            install(ContentNegotiation) { json() }
+            flowAnalysisRoutes(
+                FlowAnalysisService(
+                    store = store,
+                    scope = CoroutineScope(Dispatchers.Unconfined),
+                    seerClient = seerClient
+                )
+            )
+        }
+
+        val response = client.post("/v1/flow-analysis/flow-8/actions/generate-dashboard/execute")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals("\"generate-dashboard\"", body["id"].toString())
+        assertEquals("\"EXECUTED\"", body["status"].toString())
+        assertEquals(
+            "\"https://sentry-sdks.sentry.io/issues/?statsPeriod=10m&explorerRunId=uuid\"",
+            body["seer_run_url"].toString()
+        )
+        assertEquals(null, body["flow_id"], "the answer is the action, not the whole analysis")
+        assertEquals(ActionStatus.EXECUTED, store.loadResult("flow-8")!!.actions.first().status)
+    }
+
+    @Test
+    fun `POST execute disabled flow action answers 409`() = testApplication {
+        val store = FlowAnalysisStore(createTempDirectory("flow-routes-flow-execute-disabled").toFile())
+        store.saveResult(
+            FlowAnalysisResponse(
+                flowId = "flow-11",
                 status = AnalysisStatus.COMPLETED,
                 actions = flowActions()
             )
@@ -287,14 +338,10 @@ class FlowAnalysisRoutesTest {
             )
         }
 
-        val response = client.post("/v1/flow-analysis/flow-8/actions/generate-dashboard/execute")
+        val response = client.post("/v1/flow-analysis/flow-11/actions/generate-dashboard/execute")
 
-        assertEquals(HttpStatusCode.OK, response.status)
-        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
-        assertEquals("\"generate-dashboard\"", body["id"].toString())
-        assertEquals("\"EXECUTED\"", body["status"].toString())
-        assertEquals(null, body["flow_id"], "the answer is the action, not the whole analysis")
-        assertEquals(ActionStatus.EXECUTED, store.loadResult("flow-8")!!.actions.first().status)
+        assertEquals(HttpStatusCode.Conflict, response.status)
+        assertEquals("""{"error":"the action is not executable by the bridge"}""", response.bodyAsText())
     }
 
     @Test
@@ -340,7 +387,7 @@ class FlowAnalysisRoutesTest {
         val response = client.post("/v1/flow-analysis/flow-10/actions/share-recording-json/execute")
 
         assertEquals(HttpStatusCode.Conflict, response.status)
-        assertEquals("""{"error":"the action is handled by the client"}""", response.bodyAsText())
+        assertEquals("""{"error":"the action is not executable by the bridge"}""", response.bodyAsText())
     }
 
   @Test
