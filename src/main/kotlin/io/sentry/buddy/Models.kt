@@ -53,8 +53,9 @@ data class Recommendation(
 data class RecommendationAction(
     val id: String,
     @SerialName("action_label") val actionLabel: String,
+    @SerialName("actionable_for_seer") val actionableForSeer: Boolean = false,
     /** Detailed instructions on how the action is carried out. It goes into the Seer prompt. */
-    val description: String,
+    val description: String = "",
     /** a link to an existing dashboard, a trace, or an explore query. */
     val link: String? = null,
     val status: ActionStatus = ActionStatus.OPEN,

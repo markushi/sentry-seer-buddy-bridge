@@ -15,14 +15,14 @@ fun Application.configureHealthCheck(advisor: SdkUpgradeAdvisor = SdkUpgradeAdvi
             recommendations.add(
                 Recommendation(
                     id = UUID.randomUUID().toString(),
-                    title = "sample_rate is not set.",
-                    description = "sample_rate is ${config.sampleRate}, for full visibility in debug mode set it to 1.0",
-                    link = "https://docs.sentry.io/platforms/android/",
+                    title = "sample_rate is not 1.0",
+                    description = "Set sampleRate to 1.0 in the Sentry SDK options for your debug builds.",
                     severity = Severity.LOW,
                     actions = listOf(
                         RecommendationAction(
                             id = UUID.randomUUID().toString(),
-                            actionLabel = "Set the sample rate",
+                            actionLabel = "Configure sample_rate",
+                            link = "https://docs.sentry.io/platforms/android/configuration/sampling/",
                             description = "Set sampleRate to 1.0 in the Sentry SDK options of the " +
                                 "debug build, so that every event of the session is sent."
                         )

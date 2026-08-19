@@ -24,11 +24,12 @@ that agree with this schema:
 [
   {
     "title": "string, short imperative summary, max 12 words",
-    "description": "string, 1 concise sentence explaining the issue and the suggested fix",
+    "description": "string, 1 concise sentence explaining the issue",
     "link": "string or null, a URL if directly relevant (e.g. a docs page), otherwise null",
     "actions": [
       {
-        "label": "string, only 1-3 words (e.g. open a PR, create a dashboard)",
+        "action_label": "string, only 1-3 words (e.g. open a PR, create a dashboard)",
+        "actionable_for_seer": "boolean, true if the action involves code changes",
         "description": "string, with detailed instructions on how the action can be fixed",
         "link": "string or null, a URL to an existing dashboard, a trace or explore query on sentry.io"
       }
@@ -43,8 +44,11 @@ that agree with this schema:
 
 ### Example Actions
 
+- Create a PR
 - Add OkHttp instrumentation
 - Add database instrumentation
+- Enable logging
+- Enabling metrics
 - Analyze span performance
 - Create dashboard
 - Open dashboard

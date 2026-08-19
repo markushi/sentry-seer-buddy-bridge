@@ -8,6 +8,7 @@ import io.sentry.buddy.Severity
 import io.sentry.buddy.seer.SeerClient
 import io.sentry.buddy.seer.SeerPrompts
 import io.sentry.buddy.seer.seerJson
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -32,8 +33,9 @@ private data class SeerRecommendationDto(
 
 @Serializable
 private data class SeerActionDto(
-    val label: String,
-    val description: String,
+    @SerialName("action_label") val actionLabel: String,
+    @SerialName("actionable_for_seer") val actionableForSeer: Boolean = false,
+    val description: String = "",
     val link: String? = null
 )
 
@@ -62,7 +64,7 @@ private fun parseActions(elements: List<JsonElement>, json: Json): List<Recommen
         }
         RecommendationAction(
             id = UUID.randomUUID().toString(),
-            actionLabel = dto.label,
+            actionLabel = dto.actionLabel,
             description = dto.description,
             link = dto.link
         )
