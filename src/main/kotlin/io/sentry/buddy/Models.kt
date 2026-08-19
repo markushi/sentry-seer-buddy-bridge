@@ -42,7 +42,27 @@ data class Recommendation(
     val link: String? = null,
     val severity: Severity = Severity.MEDIUM,
     val status: RecommendationStatus = RecommendationStatus.OPEN,
-    val actions: List<RecommendationAction> = emptyList()
+    val actions: List<RecommendationAction> = emptyList(),
+    /** How the span of the recommendation compares against production. Only spans have one. */
+    @SerialName("performance_characteristics") val performanceCharacteristics: PerformanceCharacteristics? = null
+)
+
+/**
+ * The duration of one span in the recording, next to the durations the same span op has in
+ * production. Every field is optional, because the model cannot always query all of them.
+ */
+@Serializable
+data class PerformanceCharacteristics(
+    @SerialName("span_op") val spanOp: String? = null,
+    /** an explore query on sentry.io that shows the production data. */
+    val link: String? = null,
+    /** the duration found in the recording. */
+    val duration: String? = null,
+    val avg: String? = null,
+    val p50: String? = null,
+    val p75: String? = null,
+    val p90: String? = null,
+    val p95: String? = null
 )
 
 /**

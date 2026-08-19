@@ -14,6 +14,7 @@ Analyze the flow and provide recommendations to app developers on how to better 
   queries, the Sentry instrumentation is probably not sufficient
 - A relation between a user action and a Sentry issue near in time
 - A problem in the user's own description that the events agree with
+- Query for span durations of production data and compare it against the sample, if they don't match provide a recommendation to optimize the span, and back this up by providing the "performance_characteristics" payload
 
 ## Output format
 
@@ -34,6 +35,16 @@ that agree with this schema:
         "link": "string or null, a URL to an existing dashboard, a trace or explore query on sentry.io"
       }
     ],
+    "performance_characteristics": {
+      "span.op": "span op, as found in the recording",
+      "link": "a URL pointing to a explore query which opens sentry.io/explore/traces/",
+      "duration": "span duration, as found in the recording",
+      "avg": "avg duration queried from production data",
+      "p50": "p50 queried from production data",
+      "p75": "p75 queried from production data",
+      "p90": "p90 queried from production data",
+      "p95": "p95 queried from production data"
+    },
     "severity": "LOW | MEDIUM | HIGH"
   }
 ]
@@ -42,7 +53,11 @@ that agree with this schema:
 - Give an empty array `[]` if you find nothing important. Do not invent recommendations.
 - Do not use tools that change code. Only analyze and answer.
 
-### actions
+### `performance_characteristics`
+
+The `performance_characteristics` is only relevant for spans.
+
+### `actions`
 
 Actions have to either hold a "link" or have "actionable_for_seer" set to "true",
 otherwise the action is considered invalid as it's not actionable.

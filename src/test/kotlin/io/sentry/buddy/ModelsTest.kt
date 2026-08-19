@@ -58,6 +58,48 @@ class ModelsTest {
     }
 
     @Test
+    fun `a recommendation encodes its performance characteristics as performance_characteristics`() {
+        val recommendation = Recommendation(
+            id = "rec-1",
+            title = "T",
+            description = "D",
+            performanceCharacteristics = PerformanceCharacteristics(
+                spanOp = "db.sql.query",
+                link = "https://sentry.io/explore/traces/?query=db",
+                duration = "820ms",
+                avg = "120ms",
+                p50 = "90ms",
+                p75 = "140ms",
+                p90 = "210ms",
+                p95 = "300ms"
+            )
+        )
+
+        val encoded = appJson.encodeToString(Recommendation.serializer(), recommendation)
+
+        assertTrue(encoded.contains("\"performance_characteristics\""), "expected the key in $encoded")
+        assertTrue(encoded.contains("\"span_op\":\"db.sql.query\""), "expected span_op in $encoded")
+        assertTrue(encoded.contains("\"p95\":\"300ms\""), "expected p95 in $encoded")
+        assertEquals(
+            recommendation,
+            appJson.decodeFromString(Recommendation.serializer(), encoded)
+        )
+    }
+
+    @Test
+    fun `the api encodes a null performance_characteristics when the recommendation has none`() {
+        val encoded = appJson.encodeToString(
+            Recommendation.serializer(),
+            Recommendation(id = "rec-1", title = "T", description = "D")
+        )
+
+        assertTrue(
+            encoded.contains("\"performance_characteristics\":null"),
+            "expected a null performance_characteristics in $encoded"
+        )
+    }
+
+    @Test
     fun `the api encodes the defaults of an action, including a null seer_run_url`() {
         val encoded = appJson.encodeToString(
             RecommendationAction.serializer(),

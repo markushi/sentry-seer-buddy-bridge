@@ -100,9 +100,9 @@ class SeerRecommendationEnrichmentTest {
                 "description": "No network spans are recorded.",
                 "severity": "HIGH",
                 "actions": [
-                  {"label": "Open a PR", "description": "Add the Sentry OkHttp interceptor."},
+                  {"action_label": "Open a PR", "description": "Add the Sentry OkHttp interceptor.", "actionable_for_seer": true},
                   {
-                    "label": "Open dashboard",
+                    "action_label": "Open dashboard",
                     "description": "Compare against production.",
                     "link": "https://sentry.io/dashboard/1"
                   }
@@ -117,9 +117,61 @@ class SeerRecommendationEnrichmentTest {
         assertEquals("Add the Sentry OkHttp interceptor.", actions[0].description)
         assertEquals(null, actions[0].link)
         assertEquals("https://sentry.io/dashboard/1", actions[1].link)
+        assertEquals(true, actions[0].actionableForSeer)
+        assertEquals(false, actions[1].actionableForSeer)
         assertEquals(ActionStatus.OPEN, actions[0].status)
         assertNotEquals(actions[0].id, actions[1].id)
         assertTrue(actions[0].id.isNotBlank())
+    }
+
+    @Test
+    fun `parseRecommendations maps the performance characteristics`() {
+        val output = """
+            [
+              {
+                "title": "Optimize the db query",
+                "description": "It is slower than production.",
+                "performance_characteristics": {
+                  "span.op": "db.sql.query",
+                  "link": "https://sentry.io/explore/traces/?query=db",
+                  "duration": "820ms",
+                  "avg": "120ms",
+                  "p50": "90ms",
+                  "p75": "140ms",
+                  "p90": "210ms",
+                  "p95": "300ms"
+                }
+              }
+            ]
+        """.trimIndent()
+
+        val performance = parseRecommendations(output, json).single().performanceCharacteristics!!
+
+        assertEquals("db.sql.query", performance.spanOp)
+        assertEquals("https://sentry.io/explore/traces/?query=db", performance.link)
+        assertEquals("820ms", performance.duration)
+        assertEquals("120ms", performance.avg)
+        assertEquals("90ms", performance.p50)
+        assertEquals("140ms", performance.p75)
+        assertEquals("210ms", performance.p90)
+        assertEquals("300ms", performance.p95)
+    }
+
+    @Test
+    fun `parseRecommendations gives no performance characteristics when the answer has none`() {
+        val output = """[{"title": "T", "description": "D"}]"""
+
+        assertEquals(null, parseRecommendations(output, json).single().performanceCharacteristics)
+    }
+
+    @Test
+    fun `parseRecommendations skips performance characteristics it cannot decode and keeps the recommendation`() {
+        val output = """[{"title": "T", "description": "D", "performance_characteristics": "not an object"}]"""
+
+        val recommendation = parseRecommendations(output, json).single()
+
+        assertEquals("T", recommendation.title)
+        assertEquals(null, recommendation.performanceCharacteristics)
     }
 
     @Test
@@ -138,7 +190,7 @@ class SeerRecommendationEnrichmentTest {
                 "description": "D",
                 "actions": [
                   {"description": "no label at all"},
-                  {"label": "Open a PR", "description": "Do it."}
+                  {"action_label": "Open a PR", "description": "Do it."}
                 ]
               }
             ]
