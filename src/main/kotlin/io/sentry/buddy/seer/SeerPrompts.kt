@@ -1,6 +1,7 @@
 package io.sentry.buddy.seer
 
 import io.sentry.buddy.FlowAnalysisRequest
+import io.sentry.buddy.FlowAction
 import io.sentry.buddy.Recommendation
 import io.sentry.buddy.RecommendationAction
 import io.sentry.buddy.SentryIssue
@@ -46,6 +47,21 @@ object SeerPrompts {
         appendLine("Action instructions: ${fenced(action.description)}")
         action.link?.let { appendLine("Action link: ${fenced(it)}") }
         appendLine("</recommendation-data>")
+        appendLine()
+        append(flowContext(request, issues))
+    }
+
+    fun flowAction(request: FlowAnalysisRequest, issues: List<SentryIssue>, action: FlowAction): String = buildString {
+        appendLine(resource("/flow-action-prompt.md"))
+        appendLine()
+        appendLine("## Flow action to carry out")
+        appendLine()
+        appendLine(UNTRUSTED_WARNING)
+        appendLine("<flow-action-data>")
+        appendLine("Action: ${fenced(action.actionLabel)}")
+        appendLine("Action instructions: ${fenced(action.description)}")
+        action.link?.let { appendLine("Action link: ${fenced(it)}") }
+        appendLine("</flow-action-data>")
         appendLine()
         append(flowContext(request, issues))
     }
