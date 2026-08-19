@@ -100,7 +100,7 @@ fun Application.flowAnalysisRoutes(flowAnalysisService: FlowAnalysisService) {
                         call.respond(HttpStatusCode.NotFound, mapOf("error" to "action not found"))
 
                     ExecuteFlowActionOutcome.ActionNotExecutable ->
-                        call.respond(HttpStatusCode.Conflict, mapOf("error" to "the action is handled by the client"))
+                        call.respond(HttpStatusCode.Conflict, mapOf("error" to "the action is not executable by the bridge"))
 
                     // The detail of the failure names organization flags and access-gate state, so it
                     // belongs in the log (the service writes it) and not in the answer.

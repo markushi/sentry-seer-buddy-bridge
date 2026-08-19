@@ -102,6 +102,26 @@ class FlowAnalysisServiceTest {
             listOf("generate-dashboard", "generate-monitors", "share-recording-json"),
             result.actions.map { it.id }
         )
+        assertEquals(
+            listOf(false, false, false),
+            result.actions.map { it.actionableForSeer }
+        )
+    }
+
+    @Test
+    fun `submit marks default Seer actions executable when Seer is configured`() {
+        val service = newService(
+            seerClient = seerClientThatResponds("{\"run_id\": 77, \"sentry_run_id\": \"uuid\"}")
+        )
+
+        service.submitOrGetExisting(sampleRequest())
+
+        val result = service.get("flow-1")
+        assertNotNull(result)
+        assertEquals(
+            listOf(true, true, false),
+            result.actions.map { it.actionableForSeer }
+        )
     }
 
     @Test
@@ -127,6 +147,10 @@ class FlowAnalysisServiceTest {
         assertEquals(
             listOf("generate-dashboard", "generate-monitors", "share-recording-json"),
             result.actions.map { it.id }
+        )
+        assertEquals(
+            listOf(false, false, false),
+            result.actions.map { it.actionableForSeer }
         )
         assertEquals(result.actions, store.loadResult("flow-1")!!.actions)
     }
@@ -262,30 +286,28 @@ class FlowAnalysisServiceTest {
     }
 
     @Test
-    fun `executeFlowAction marks the action EXECUTED`() = runBlocking {
+    fun `executeFlowAction returns ActionNotExecutable when a default Seer action is disabled`() = runBlocking {
         val store = storeWith("flow-execute-flow-action", emptyList(), actions = flowActions())
         val service = newService(store = store)
 
         val outcome = service.executeFlowAction("flow-1", "generate-dashboard")
 
-        assertTrue(outcome is ExecuteFlowActionOutcome.Success)
-        assertEquals(ActionStatus.EXECUTED, outcome.action.status)
-        assertNull(outcome.action.seerRunUrl, "without a Seer client there is no run url")
-        assertEquals(ActionStatus.EXECUTED, store.storedFlowAction().status)
+        assertEquals(ExecuteFlowActionOutcome.ActionNotExecutable, outcome)
+        assertEquals(ActionStatus.OPEN, store.storedFlowAction().status)
         assertEquals(ActionStatus.OPEN, store.storedFlowAction("generate-monitors").status)
     }
 
     @Test
-    fun `executeFlowAction backfills old completed results before executing`() = runBlocking {
+    fun `executeFlowAction backfills old completed results as disabled without Seer`() = runBlocking {
         val store = FlowAnalysisStore(createTempDirectory("flow-execute-flow-action-old-result").toFile())
         store.saveResult(FlowAnalysisResponse(flowId = "flow-1", status = AnalysisStatus.COMPLETED))
         val service = newService(store = store)
 
         val outcome = service.executeFlowAction("flow-1", "generate-dashboard")
 
-        assertTrue(outcome is ExecuteFlowActionOutcome.Success)
-        assertEquals(ActionStatus.EXECUTED, outcome.action.status)
-        assertEquals(ActionStatus.EXECUTED, store.storedFlowAction().status)
+        assertEquals(ExecuteFlowActionOutcome.ActionNotExecutable, outcome)
+        assertEquals(false, store.storedFlowAction().actionableForSeer)
+        assertEquals(ActionStatus.OPEN, store.storedFlowAction().status)
     }
 
     @Test

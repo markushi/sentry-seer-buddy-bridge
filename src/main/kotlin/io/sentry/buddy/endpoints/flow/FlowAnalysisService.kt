@@ -138,24 +138,23 @@ class FlowAnalysisService(
             if (target.status == ActionStatus.EXECUTED && target.seerRunUrl != null) {
                 return@withFlowLock ExecuteFlowActionOutcome.Success(target)
             }
+            if (seerClient == null) {
+                return@withFlowLock ExecuteFlowActionOutcome.SeerStartFailed("Seer is not configured")
+            }
 
-            val seerRunUrl = if (seerClient == null) {
-                null
-            } else {
-                val request = store.loadRequest(flowId)
-                    ?: return@withFlowLock ExecuteFlowActionOutcome.SeerStartFailed("no stored request for flow $flowId")
-                try {
-                    val run = seerClient.startRun(
-                        query = SeerPrompts.flowAction(request, current.issues, target),
-                        pageName = PAGE_NAME_FLOW_IMPLEMENT
-                    )
-                    logger.info("Started the Seer flow action run ${run.runId} for $flowId/$actionId")
-                    seerClient.runUrl(run.sentryRunId)
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    logger.warn("Could not start the Seer flow action run for $flowId/$actionId", e)
-                    return@withFlowLock ExecuteFlowActionOutcome.SeerStartFailed(e.message ?: "unknown error")
-                }
+            val request = store.loadRequest(flowId)
+                ?: return@withFlowLock ExecuteFlowActionOutcome.SeerStartFailed("no stored request for flow $flowId")
+            val seerRunUrl = try {
+                val run = seerClient.startRun(
+                    query = SeerPrompts.flowAction(request, current.issues, target),
+                    pageName = PAGE_NAME_FLOW_IMPLEMENT
+                )
+                logger.info("Started the Seer flow action run ${run.runId} for $flowId/$actionId")
+                seerClient.runUrl(run.sentryRunId)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                logger.warn("Could not start the Seer flow action run for $flowId/$actionId", e)
+                return@withFlowLock ExecuteFlowActionOutcome.SeerStartFailed(e.message ?: "unknown error")
             }
 
             val executed = target.copy(status = ActionStatus.EXECUTED, seerRunUrl = seerRunUrl)
@@ -180,7 +179,7 @@ class FlowAnalysisService(
             response.copy(
                 status = AnalysisStatus.COMPLETED,
                 enrichmentErrors = errors,
-                actions = response.actions.ifEmpty { defaultFlowActions() }
+                actions = response.actions.mergedWith(defaultFlowActions(seerClient != null))
             )
         } catch (e: Exception) {
             if (e is CancellationException) throw e
@@ -194,8 +193,8 @@ class FlowAnalysisService(
     }
 
     private fun FlowAnalysisResponse.withDefaultActionsPersisted(): FlowAnalysisResponse {
-        val backfilled = withDefaultActions()
-        if (backfilled !== this) {
+        val backfilled = withDefaultActions(seerClient != null)
+        if (backfilled != this) {
             store.saveResult(backfilled)
         }
         return backfilled
@@ -208,18 +207,18 @@ private fun List<Recommendation>.replacing(recommendation: Recommendation): List
 private fun List<FlowAction>.replacing(action: FlowAction): List<FlowAction> =
     map { if (it.id == action.id) action else it }
 
-private fun defaultFlowActions(): List<FlowAction> = listOf(
+private fun defaultFlowActions(seerAvailable: Boolean): List<FlowAction> = listOf(
     FlowAction(
         id = "generate-dashboard",
         actionLabel = "Dashboard",
-        actionableForSeer = true,
+        actionableForSeer = seerAvailable,
         description = "Draft a Sentry dashboard from this flow recording, including widgets, " +
             "queries, and rationale for each widget. Do not create the dashboard directly."
     ),
     FlowAction(
         id = "generate-monitors",
         actionLabel = "Monitors",
-        actionableForSeer = true,
+        actionableForSeer = seerAvailable,
         description = "Draft Sentry monitor candidates from this flow recording, including " +
             "signals, thresholds, and rationale. Do not create monitors directly."
     ),
@@ -230,9 +229,23 @@ private fun defaultFlowActions(): List<FlowAction> = listOf(
     )
 )
 
-private fun FlowAnalysisResponse.withDefaultActions(): FlowAnalysisResponse =
-    if (status == AnalysisStatus.COMPLETED && actions.isEmpty()) {
-        copy(actions = defaultFlowActions())
+private fun FlowAnalysisResponse.withDefaultActions(seerAvailable: Boolean): FlowAnalysisResponse =
+    if (status == AnalysisStatus.COMPLETED) {
+        copy(actions = actions.mergedWith(defaultFlowActions(seerAvailable)))
     } else {
         this
     }
+
+private fun List<FlowAction>.mergedWith(defaultActions: List<FlowAction>): List<FlowAction> {
+    val existingById = associateBy { it.id }
+    val mergedDefaults = defaultActions.map { default ->
+        existingById[default.id]?.let { existing ->
+            default.copy(
+                link = existing.link ?: default.link,
+                status = existing.status,
+                seerRunUrl = existing.seerRunUrl
+            )
+        } ?: default
+    }
+    return mergedDefaults + filterNot { existing -> defaultActions.any { it.id == existing.id } }
+}
