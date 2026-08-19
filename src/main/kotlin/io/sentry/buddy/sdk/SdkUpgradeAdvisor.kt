@@ -23,7 +23,13 @@ private data class GithubReleaseDto(val tag_name: String)
  * analysis enrichment and the health check endpoint use it, so the rule lives in one place only.
  */
 class SdkUpgradeAdvisor(
-    private val httpClient: HttpClient = HttpClient(CIO) { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } },
+    private val httpClient: HttpClient = HttpClient(CIO) {
+        install(ContentNegotiation) {
+            json(Json {
+                ignoreUnknownKeys = true
+            })
+        }
+    },
     private val releasesUrl: String = "https://api.github.com/repos/getsentry/sentry-java/releases/latest"
 ) {
 
@@ -46,8 +52,14 @@ class SdkUpgradeAdvisor(
                     id = UUID.randomUUID().toString(),
                     actionLabel = "Open a PR",
                     description = "Raise the Sentry SDK dependency of this project from " +
-                        "$currentVersion to $latestVersion, and adapt the code to the changes of " +
-                        "the release notes if there are any."
+                            "$currentVersion to $latestVersion, and adapt the code to the changes of " +
+                            "the release notes if there are any."
+                ),
+                RecommendationAction(
+                    id = UUID.randomUUID().toString(),
+                    actionLabel = "Show Changelog",
+                    description = "Show the release notes of sentry-java $latestVersion.",
+                    link = "https://github.com/getsentry/sentry-java/releases/tag/$latestVersion"
                 )
             )
         )

@@ -66,9 +66,15 @@ class SdkUpgradeAdvisorTest {
         assertEquals("https://github.com/getsentry/sentry-java/releases/tag/8.41.0", recommendation?.link)
         assertEquals(Severity.LOW, recommendation?.severity)
         assertTrue(recommendation!!.description.contains("io.sentry.android@8.40.0"))
-        val action = recommendation.actions.single()
-        assertEquals("Open a PR", action.actionLabel)
-        assertTrue(action.description.contains("8.41.0"), "the action says which version to go to")
+        val (prAction, changelogAction) = recommendation.actions
+        assertEquals("Open a PR", prAction.actionLabel)
+        assertTrue(prAction.description.contains("8.41.0"), "the action says which version to go to")
+        assertEquals("Show Changelog", changelogAction.actionLabel)
+        assertEquals(
+            "https://github.com/getsentry/sentry-java/releases/tag/8.41.0",
+            changelogAction.link,
+            "the changelog action points at the release notes"
+        )
     }
 
     @Test
