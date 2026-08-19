@@ -29,7 +29,7 @@ that agree with this schema:
     "actions": [
       {
         "action_label": "string, only 1-3 words (e.g. open a PR, create a dashboard)",
-        "actionable_for_seer": "boolean, true if the action involves code changes",
+        "actionable_for_seer": "boolean, true if the action can be resolved by doing code changes or actions on the sentry dashboard",
         "description": "string, with detailed instructions on how the action can be fixed",
         "link": "string or null, a URL to an existing dashboard, a trace or explore query on sentry.io"
       }
@@ -42,7 +42,10 @@ that agree with this schema:
 - Give an empty array `[]` if you find nothing important. Do not invent recommendations.
 - Do not use tools that change code. Only analyze and answer.
 
-### Example Actions
+### actions
+
+Actions have to either hold a "link" or have "actionable_for_seer" set to "true",
+otherwise the action is considered invalid as it's not actionable.
 
 - Create a PR
 - Add OkHttp instrumentation

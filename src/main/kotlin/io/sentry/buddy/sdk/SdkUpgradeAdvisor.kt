@@ -45,12 +45,12 @@ class SdkUpgradeAdvisor(
             id = UUID.randomUUID().toString(),
             title = "Upgrade Sentry SDK to $latestVersion",
             description = "Version $sdk detected, but sentry-java $latestVersion is available.",
-            link = "https://github.com/getsentry/sentry-java/releases/tag/$latestVersion",
             severity = Severity.LOW,
             actions = listOf(
                 RecommendationAction(
                     id = UUID.randomUUID().toString(),
                     actionLabel = "Open a PR",
+                    actionableForSeer = true,
                     description = "Raise the Sentry SDK dependency of this project from " +
                             "$currentVersion to $latestVersion, and adapt the code to the changes of " +
                             "the release notes if there are any."
