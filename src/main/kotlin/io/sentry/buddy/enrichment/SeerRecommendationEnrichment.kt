@@ -65,6 +65,7 @@ private fun parseActions(elements: List<JsonElement>, json: Json): List<Recommen
         RecommendationAction(
             id = UUID.randomUUID().toString(),
             actionLabel = dto.actionLabel,
+            actionableForSeer = dto.actionableForSeer,
             description = dto.description,
             link = dto.link
         )
