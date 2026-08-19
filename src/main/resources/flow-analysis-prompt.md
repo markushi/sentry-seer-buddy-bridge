@@ -14,7 +14,7 @@ Analyze the flow and provide recommendations to app developers on how to better 
   queries, the Sentry instrumentation is probably not sufficient
 - A relation between a user action and a Sentry issue near in time
 - A problem in the user's own description that the events agree with
-- Query for span durations of production data and compare it against the sample, if they don't match provide a recommendation to optimize the span, and back this up by providing the "performance_characteristics" payload
+- Query for span durations of production data and compare it against the sample, if the sample's duration does not match our production data, recommend further investigation and back this up by providing the "performance_characteristics" payload
 
 ## Output format
 
@@ -55,7 +55,8 @@ that agree with this schema:
 
 ### `performance_characteristics`
 
-The `performance_characteristics` is only relevant for spans.
+The `performance_characteristics` is only relevant for spans, and is used to compare the recording against production data.
+All duration fields are just numbers (e.g. 12.34), in milliseconds, without any unit provided. 
 
 ### `actions`
 
