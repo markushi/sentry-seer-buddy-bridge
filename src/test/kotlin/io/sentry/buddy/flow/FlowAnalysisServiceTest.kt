@@ -2,6 +2,7 @@ package io.sentry.buddy.flow
 
 import io.sentry.buddy.ActionStatus
 import io.sentry.buddy.AnalysisStatus
+import io.sentry.buddy.FlowAction
 import io.sentry.buddy.FlowAnalysisEvent
 import io.sentry.buddy.FlowAnalysisRequest
 import io.sentry.buddy.FlowAnalysisResponse
@@ -12,6 +13,7 @@ import io.sentry.buddy.endpoints.flow.FlowAnalysisService
 import io.sentry.buddy.endpoints.flow.FlowAnalysisStore
 import io.sentry.buddy.endpoints.flow.DismissOutcome
 import io.sentry.buddy.endpoints.flow.ExecuteActionOutcome
+import io.sentry.buddy.endpoints.flow.ExecuteFlowActionOutcome
 import io.sentry.buddy.enrichment.Enrichment
 import io.ktor.client.*
 import io.ktor.client.engine.mock.*
@@ -96,6 +98,10 @@ class FlowAnalysisServiceTest {
         assertNotNull(result)
         assertEquals(AnalysisStatus.COMPLETED, result.status)
         assertEquals("Test title", result.title)
+        assertEquals(
+            listOf("generate-dashboard", "generate-monitors", "share-recording-json"),
+            result.actions.map { it.id }
+        )
     }
 
     @Test
@@ -167,9 +173,30 @@ class FlowAnalysisServiceTest {
         )
     )
 
+    private fun flowActions() = listOf(
+        FlowAction(
+            id = "generate-dashboard",
+            actionLabel = "Dashboard",
+            actionableForSeer = true,
+            description = "Draft a dashboard."
+        ),
+        FlowAction(
+            id = "generate-monitors",
+            actionLabel = "Monitors",
+            actionableForSeer = true,
+            description = "Draft monitors."
+        ),
+        FlowAction(
+            id = "share-recording-json",
+            actionLabel = "Share JSON",
+            description = "Share the JSON."
+        )
+    )
+
     private fun storeWith(
         name: String,
         recommendations: List<Recommendation>,
+        actions: List<FlowAction> = emptyList(),
         withRequest: Boolean = true
     ): FlowAnalysisStore {
         val store = FlowAnalysisStore(createTempDirectory(name).toFile())
@@ -178,7 +205,8 @@ class FlowAnalysisServiceTest {
             FlowAnalysisResponse(
                 flowId = "flow-1",
                 status = AnalysisStatus.COMPLETED,
-                recommendations = recommendations
+                recommendations = recommendations,
+                actions = actions
             )
         )
         return store
@@ -186,6 +214,9 @@ class FlowAnalysisServiceTest {
 
     private fun FlowAnalysisStore.storedAction(recommendationId: String = "rec-1", actionId: String = "act-1") =
         loadResult("flow-1")!!.recommendations.single { it.id == recommendationId }.actions.single { it.id == actionId }
+
+    private fun FlowAnalysisStore.storedFlowAction(actionId: String = "generate-dashboard") =
+        loadResult("flow-1")!!.actions.single { it.id == actionId }
 
     @Test
     fun `executeAction marks the action EXECUTED`() = runBlocking {
@@ -198,6 +229,123 @@ class FlowAnalysisServiceTest {
         assertEquals(ActionStatus.EXECUTED, outcome.action.status)
         assertNull(outcome.action.seerRunUrl, "without a Seer client there is no run url")
         assertEquals(ActionStatus.EXECUTED, store.storedAction().status)
+    }
+
+    @Test
+    fun `executeFlowAction marks the action EXECUTED`() = runBlocking {
+        val store = storeWith("flow-execute-flow-action", emptyList(), actions = flowActions())
+        val service = newService(store = store)
+
+        val outcome = service.executeFlowAction("flow-1", "generate-dashboard")
+
+        assertTrue(outcome is ExecuteFlowActionOutcome.Success)
+        assertEquals(ActionStatus.EXECUTED, outcome.action.status)
+        assertNull(outcome.action.seerRunUrl, "without a Seer client there is no run url")
+        assertEquals(ActionStatus.EXECUTED, store.storedFlowAction().status)
+        assertEquals(ActionStatus.OPEN, store.storedFlowAction("generate-monitors").status)
+    }
+
+    @Test
+    fun `executeFlowAction starts a Seer run and stores the run url`() = runBlocking {
+        val store = storeWith("flow-execute-flow-action-seer", emptyList(), actions = flowActions())
+        val service = newService(
+            store = store,
+            seerClient = seerClientThatResponds("{\"run_id\": 77, \"sentry_run_id\": \"1ebfee71-uuid\"}")
+        )
+
+        val outcome = service.executeFlowAction("flow-1", "generate-dashboard")
+
+        assertTrue(outcome is ExecuteFlowActionOutcome.Success)
+        assertEquals(
+            "https://sentry-sdks.sentry.io/issues/?project=5428559&statsPeriod=10m&explorerRunId=1ebfee71-uuid",
+            outcome.action.seerRunUrl
+        )
+        assertEquals(ActionStatus.EXECUTED, outcome.action.status)
+        assertEquals(outcome.action.seerRunUrl, store.storedFlowAction().seerRunUrl)
+    }
+
+    @Test
+    fun `executing a flow action twice keeps the first run url and starts no second run`() = runBlocking {
+        val store = storeWith("flow-execute-flow-action-twice", emptyList(), actions = flowActions())
+        val service = newService(
+            store = store,
+            seerClient = seerClientThatResponds("{\"run_id\": 77, \"sentry_run_id\": \"1ebfee71-uuid\"}")
+        )
+
+        val first = service.executeFlowAction("flow-1", "generate-dashboard")
+        val second = service.executeFlowAction("flow-1", "generate-dashboard")
+
+        assertTrue(first is ExecuteFlowActionOutcome.Success)
+        assertTrue(second is ExecuteFlowActionOutcome.Success)
+        assertEquals(first.action.seerRunUrl, second.action.seerRunUrl)
+        assertEquals(1, startRequestCount.get(), "the second execute must not start a second run")
+    }
+
+    @Test
+    fun `executeFlowAction leaves the action OPEN when the Seer run cannot start`() = runBlocking {
+        val store = storeWith("flow-execute-flow-action-seer-fail", emptyList(), actions = flowActions())
+        val service = newService(
+            store = store,
+            seerClient = seerClientThatResponds("""{"detail": "no access"}""", HttpStatusCode.Forbidden)
+        )
+
+        val outcome = service.executeFlowAction("flow-1", "generate-dashboard")
+
+        assertTrue(outcome is ExecuteFlowActionOutcome.SeerStartFailed)
+        assertEquals(ActionStatus.OPEN, store.storedFlowAction().status)
+        assertNull(store.storedFlowAction().seerRunUrl)
+    }
+
+    @Test
+    fun `executeFlowAction fails when the Seer client has no stored request for the flow`() = runBlocking {
+        val store = storeWith(
+            "flow-execute-flow-action-no-request",
+            emptyList(),
+            actions = flowActions(),
+            withRequest = false
+        )
+        val service = newService(
+            store = store,
+            seerClient = seerClientThatResponds("{\"run_id\": 77, \"sentry_run_id\": \"uuid\"}")
+        )
+
+        val outcome = service.executeFlowAction("flow-1", "generate-dashboard")
+
+        assertTrue(outcome is ExecuteFlowActionOutcome.SeerStartFailed)
+        assertTrue(outcome.message.contains("no stored request"))
+        assertEquals(0, startRequestCount.get(), "no run is started without the flow data")
+        assertEquals(ActionStatus.OPEN, store.storedFlowAction().status)
+    }
+
+    @Test
+    fun `executeFlowAction returns ActionNotFound for an unknown action id`() = runBlocking {
+        val service = newService(
+            store = storeWith("flow-execute-flow-action-unknown", emptyList(), actions = flowActions())
+        )
+
+        assertEquals(ExecuteFlowActionOutcome.ActionNotFound, service.executeFlowAction("flow-1", "unknown"))
+    }
+
+    @Test
+    fun `executeFlowAction returns ActionNotExecutable for a client action`() = runBlocking {
+        val service = newService(
+            store = storeWith("flow-execute-flow-action-client", emptyList(), actions = flowActions())
+        )
+
+        assertEquals(
+            ExecuteFlowActionOutcome.ActionNotExecutable,
+            service.executeFlowAction("flow-1", "share-recording-json")
+        )
+    }
+
+    @Test
+    fun `executeFlowAction returns FlowAnalysisNotFound for an unknown flow`() = runBlocking {
+        val service = newService()
+
+        assertEquals(
+            ExecuteFlowActionOutcome.FlowAnalysisNotFound,
+            service.executeFlowAction("unknown", "generate-dashboard")
+        )
     }
 
     @Test

@@ -12,6 +12,7 @@ import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.testing.*
 import io.sentry.buddy.ActionStatus
 import io.sentry.buddy.AnalysisStatus
+import io.sentry.buddy.FlowAction
 import io.sentry.buddy.FlowAnalysisEvent
 import io.sentry.buddy.FlowAnalysisRequest
 import io.sentry.buddy.FlowAnalysisResponse
@@ -28,6 +29,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
@@ -91,6 +93,10 @@ class FlowAnalysisRoutesTest {
         val body = Json.parseToJsonElement(response.bodyAsText())
         assertEquals("\"COMPLETED\"", body.jsonObject["status"].toString())
         assertEquals("\"Test title\"", body.jsonObject["title"].toString())
+        val actions = body.jsonObject["actions"]!!.jsonArray
+        assertEquals("\"generate-dashboard\"", actions[0].jsonObject["id"].toString())
+        assertEquals("\"generate-monitors\"", actions[1].jsonObject["id"].toString())
+        assertEquals("\"share-recording-json\"", actions[2].jsonObject["id"].toString())
     }
 
     @Test
@@ -165,6 +171,20 @@ class FlowAnalysisRoutesTest {
         description = "D",
         actions = listOf(
             RecommendationAction(id = "act-1", actionLabel = "Open a PR", description = "Do it.")
+        )
+    )
+
+    private fun flowActions() = listOf(
+        FlowAction(
+            id = "generate-dashboard",
+            actionLabel = "Dashboard",
+            actionableForSeer = true,
+            description = "Draft a dashboard."
+        ),
+        FlowAction(
+            id = "share-recording-json",
+            actionLabel = "Share JSON",
+            description = "Share the JSON."
         )
     )
 
@@ -251,6 +271,79 @@ class FlowAnalysisRoutesTest {
     }
 
     @Test
+    fun `POST execute flow action answers with the updated action only`() = testApplication {
+        val store = FlowAnalysisStore(createTempDirectory("flow-routes-flow-execute").toFile())
+        store.saveResult(
+            FlowAnalysisResponse(
+                flowId = "flow-8",
+                status = AnalysisStatus.COMPLETED,
+                actions = flowActions()
+            )
+        )
+        application {
+            install(ContentNegotiation) { json() }
+            flowAnalysisRoutes(
+                FlowAnalysisService(store = store, scope = CoroutineScope(Dispatchers.Unconfined))
+            )
+        }
+
+        val response = client.post("/v1/flow-analysis/flow-8/actions/generate-dashboard/execute")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals("\"generate-dashboard\"", body["id"].toString())
+        assertEquals("\"EXECUTED\"", body["status"].toString())
+        assertEquals(null, body["flow_id"], "the answer is the action, not the whole analysis")
+        assertEquals(ActionStatus.EXECUTED, store.loadResult("flow-8")!!.actions.first().status)
+    }
+
+    @Test
+    fun `POST execute flow action for an unknown action answers 404`() = testApplication {
+        val store = FlowAnalysisStore(createTempDirectory("flow-routes-flow-execute-404").toFile())
+        store.saveResult(
+            FlowAnalysisResponse(
+                flowId = "flow-9",
+                status = AnalysisStatus.COMPLETED,
+                actions = flowActions()
+            )
+        )
+        application {
+            install(ContentNegotiation) { json() }
+            flowAnalysisRoutes(
+                FlowAnalysisService(store = store, scope = CoroutineScope(Dispatchers.Unconfined))
+            )
+        }
+
+        val response = client.post("/v1/flow-analysis/flow-9/actions/nope/execute")
+
+        assertEquals(HttpStatusCode.NotFound, response.status)
+        assertEquals("""{"error":"action not found"}""", response.bodyAsText())
+    }
+
+    @Test
+    fun `POST execute client flow action answers 409`() = testApplication {
+        val store = FlowAnalysisStore(createTempDirectory("flow-routes-flow-execute-client").toFile())
+        store.saveResult(
+            FlowAnalysisResponse(
+                flowId = "flow-10",
+                status = AnalysisStatus.COMPLETED,
+                actions = flowActions()
+            )
+        )
+        application {
+            install(ContentNegotiation) { json() }
+            flowAnalysisRoutes(
+                FlowAnalysisService(store = store, scope = CoroutineScope(Dispatchers.Unconfined))
+            )
+        }
+
+        val response = client.post("/v1/flow-analysis/flow-10/actions/share-recording-json/execute")
+
+        assertEquals(HttpStatusCode.Conflict, response.status)
+        assertEquals("""{"error":"the action is handled by the client"}""", response.bodyAsText())
+    }
+
+  @Test
     fun `POST execute for an unknown action answers 404`() = testApplication {
         val store = FlowAnalysisStore(createTempDirectory("flow-routes-execute-404").toFile())
         store.saveResult(

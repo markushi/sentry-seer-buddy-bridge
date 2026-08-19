@@ -2,6 +2,7 @@ package io.sentry.buddy.endpoints.flow
 
 import io.sentry.buddy.ActionStatus
 import io.sentry.buddy.AnalysisStatus
+import io.sentry.buddy.FlowAction
 import io.sentry.buddy.FlowAnalysisRequest
 import io.sentry.buddy.FlowAnalysisResponse
 import io.sentry.buddy.Recommendation
@@ -31,6 +32,14 @@ sealed class ExecuteActionOutcome {
     object ActionNotFound : ExecuteActionOutcome()
     object RecommendationDismissed : ExecuteActionOutcome()
     data class SeerStartFailed(val message: String) : ExecuteActionOutcome()
+}
+
+sealed class ExecuteFlowActionOutcome {
+    data class Success(val action: FlowAction) : ExecuteFlowActionOutcome()
+    object FlowAnalysisNotFound : ExecuteFlowActionOutcome()
+    object ActionNotFound : ExecuteFlowActionOutcome()
+    object ActionNotExecutable : ExecuteFlowActionOutcome()
+    data class SeerStartFailed(val message: String) : ExecuteFlowActionOutcome()
 }
 
 class FlowAnalysisService(
@@ -114,6 +123,45 @@ class FlowAnalysisService(
             ExecuteActionOutcome.Success(executed)
         }
 
+    suspend fun executeFlowAction(flowId: String, actionId: String): ExecuteFlowActionOutcome =
+        store.withFlowLock(flowId) {
+            val current = store.loadResult(flowId) ?: return@withFlowLock ExecuteFlowActionOutcome.FlowAnalysisNotFound
+            val target = current.actions.find { it.id == actionId }
+                ?: return@withFlowLock ExecuteFlowActionOutcome.ActionNotFound
+            if (!target.actionableForSeer) {
+                return@withFlowLock ExecuteFlowActionOutcome.ActionNotExecutable
+            }
+
+            // The app retries an execute after a 502, so an action that already has its run must not
+            // start a second one and orphan the first.
+            if (target.status == ActionStatus.EXECUTED && target.seerRunUrl != null) {
+                return@withFlowLock ExecuteFlowActionOutcome.Success(target)
+            }
+
+            val seerRunUrl = if (seerClient == null) {
+                null
+            } else {
+                val request = store.loadRequest(flowId)
+                    ?: return@withFlowLock ExecuteFlowActionOutcome.SeerStartFailed("no stored request for flow $flowId")
+                try {
+                    val run = seerClient.startRun(
+                        query = SeerPrompts.flowAction(request, current.issues, target),
+                        pageName = PAGE_NAME_FLOW_IMPLEMENT
+                    )
+                    logger.info("Started the Seer flow action run ${run.runId} for $flowId/$actionId")
+                    seerClient.runUrl(run.sentryRunId)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    logger.warn("Could not start the Seer flow action run for $flowId/$actionId", e)
+                    return@withFlowLock ExecuteFlowActionOutcome.SeerStartFailed(e.message ?: "unknown error")
+                }
+            }
+
+            val executed = target.copy(status = ActionStatus.EXECUTED, seerRunUrl = seerRunUrl)
+            store.saveResult(current.copy(actions = current.actions.replacing(executed)))
+            ExecuteFlowActionOutcome.Success(executed)
+        }
+
     private suspend fun runPipeline(request: FlowAnalysisRequest) {
         val result = try {
             val errors = mutableListOf<String>()
@@ -128,7 +176,11 @@ class FlowAnalysisService(
                     response
                 }
             }
-            response.copy(status = AnalysisStatus.COMPLETED, enrichmentErrors = errors)
+            response.copy(
+                status = AnalysisStatus.COMPLETED,
+                enrichmentErrors = errors,
+                actions = response.actions.ifEmpty { defaultFlowActions() }
+            )
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             FlowAnalysisResponse(
@@ -143,3 +195,28 @@ class FlowAnalysisService(
 
 private fun List<Recommendation>.replacing(recommendation: Recommendation): List<Recommendation> =
     map { if (it.id == recommendation.id) recommendation else it }
+
+private fun List<FlowAction>.replacing(action: FlowAction): List<FlowAction> =
+    map { if (it.id == action.id) action else it }
+
+private fun defaultFlowActions(): List<FlowAction> = listOf(
+    FlowAction(
+        id = "generate-dashboard",
+        actionLabel = "Dashboard",
+        actionableForSeer = true,
+        description = "Draft a Sentry dashboard from this flow recording, including widgets, " +
+            "queries, and rationale for each widget. Do not create the dashboard directly."
+    ),
+    FlowAction(
+        id = "generate-monitors",
+        actionLabel = "Monitors",
+        actionableForSeer = true,
+        description = "Draft Sentry monitor candidates from this flow recording, including " +
+            "signals, thresholds, and rationale. Do not create monitors directly."
+    ),
+    FlowAction(
+        id = "share-recording-json",
+        actionLabel = "Share JSON",
+        description = "Share the raw flow recording JSON. This action is handled locally by Buddy."
+    )
+)

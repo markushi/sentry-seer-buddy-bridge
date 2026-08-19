@@ -83,6 +83,31 @@ fun Application.flowAnalysisRoutes(flowAnalysisService: FlowAnalysisService) {
                         call.respond(HttpStatusCode.BadGateway, mapOf("error" to "could not start the Seer run"))
                 }
             }
+
+            post("/{flowId}/actions/{actionId}/execute") {
+                val flowId = call.parameters["flowId"] ?: ""
+                validateFlowId(flowId)?.let {
+                    return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to it))
+                }
+                val actionId = call.parameters["actionId"]!!
+
+                when (val outcome = flowAnalysisService.executeFlowAction(flowId, actionId)) {
+                    is ExecuteFlowActionOutcome.Success -> call.respond(outcome.action)
+                    ExecuteFlowActionOutcome.FlowAnalysisNotFound ->
+                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "flow not found"))
+
+                    ExecuteFlowActionOutcome.ActionNotFound ->
+                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "action not found"))
+
+                    ExecuteFlowActionOutcome.ActionNotExecutable ->
+                        call.respond(HttpStatusCode.Conflict, mapOf("error" to "the action is handled by the client"))
+
+                    // The detail of the failure names organization flags and access-gate state, so it
+                    // belongs in the log (the service writes it) and not in the answer.
+                    is ExecuteFlowActionOutcome.SeerStartFailed ->
+                        call.respond(HttpStatusCode.BadGateway, mapOf("error" to "could not start the Seer run"))
+                }
+            }
         }
     }
 }

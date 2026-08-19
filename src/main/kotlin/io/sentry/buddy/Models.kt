@@ -62,6 +62,23 @@ data class RecommendationAction(
     @SerialName("seer_run_url") val seerRunUrl: String? = null
 )
 
+/**
+ * One thing that can be done about a completed flow analysis. The app shows the label, and actions
+ * marked actionable for Seer can be executed through the flow-action endpoint.
+ */
+@Serializable
+data class FlowAction(
+    val id: String,
+    @SerialName("action_label") val actionLabel: String,
+    @SerialName("actionable_for_seer") val actionableForSeer: Boolean = false,
+    /** Detailed instructions on how the action is carried out. It goes into the Seer prompt. */
+    val description: String = "",
+    /** a link to an existing dashboard, a trace, or an explore query. */
+    val link: String? = null,
+    val status: ActionStatus = ActionStatus.OPEN,
+    @SerialName("seer_run_url") val seerRunUrl: String? = null
+)
+
 @Serializable
 data class SentryIssue(
     val id: String,
@@ -80,7 +97,8 @@ data class FlowAnalysisResponse(
     val recommendations: List<Recommendation> = emptyList(),
     val issues: List<SentryIssue> = emptyList(),
     val error: String? = null,
-    @SerialName("enrichment_errors") val enrichmentErrors: List<String> = emptyList()
+    @SerialName("enrichment_errors") val enrichmentErrors: List<String> = emptyList(),
+    val actions: List<FlowAction> = emptyList()
 )
 
 /**
