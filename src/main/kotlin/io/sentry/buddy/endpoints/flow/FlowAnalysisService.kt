@@ -52,7 +52,7 @@ class FlowAnalysisService(
     private val logger = LoggerFactory.getLogger(FlowAnalysisService::class.java)
 
     fun submitOrGetExisting(request: FlowAnalysisRequest): FlowAnalysisResponse {
-        store.loadResult(request.flowId)?.let { return it }
+        store.loadResult(request.flowId)?.let { return it.withDefaultActionsPersisted() }
 
         store.saveRequest(request)
         val initial = FlowAnalysisResponse(flowId = request.flowId, status = AnalysisStatus.PROCESSING)
@@ -63,7 +63,7 @@ class FlowAnalysisService(
         return initial
     }
 
-    fun get(flowId: String): FlowAnalysisResponse? = store.loadResult(flowId)
+    fun get(flowId: String): FlowAnalysisResponse? = store.loadResult(flowId)?.withDefaultActionsPersisted()
 
     suspend fun dismissRecommendation(flowId: String, recommendationId: String): DismissOutcome =
         store.withFlowLock(flowId) {
@@ -125,7 +125,8 @@ class FlowAnalysisService(
 
     suspend fun executeFlowAction(flowId: String, actionId: String): ExecuteFlowActionOutcome =
         store.withFlowLock(flowId) {
-            val current = store.loadResult(flowId) ?: return@withFlowLock ExecuteFlowActionOutcome.FlowAnalysisNotFound
+            val current = store.loadResult(flowId)?.withDefaultActionsPersisted()
+                ?: return@withFlowLock ExecuteFlowActionOutcome.FlowAnalysisNotFound
             val target = current.actions.find { it.id == actionId }
                 ?: return@withFlowLock ExecuteFlowActionOutcome.ActionNotFound
             if (!target.actionableForSeer) {
@@ -191,6 +192,14 @@ class FlowAnalysisService(
         }
         store.withFlowLock(request.flowId) { store.saveResult(result) }
     }
+
+    private fun FlowAnalysisResponse.withDefaultActionsPersisted(): FlowAnalysisResponse {
+        val backfilled = withDefaultActions()
+        if (backfilled !== this) {
+            store.saveResult(backfilled)
+        }
+        return backfilled
+    }
 }
 
 private fun List<Recommendation>.replacing(recommendation: Recommendation): List<Recommendation> =
@@ -220,3 +229,10 @@ private fun defaultFlowActions(): List<FlowAction> = listOf(
         description = "Share the raw flow recording JSON. This action is handled locally by Buddy."
     )
 )
+
+private fun FlowAnalysisResponse.withDefaultActions(): FlowAnalysisResponse =
+    if (status == AnalysisStatus.COMPLETED && actions.isEmpty()) {
+        copy(actions = defaultFlowActions())
+    } else {
+        this
+    }
