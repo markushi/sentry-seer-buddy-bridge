@@ -116,6 +116,36 @@ class FlowAnalysisServiceTest {
     }
 
     @Test
+    fun `get backfills default actions on an old completed result`() {
+        val store = FlowAnalysisStore(createTempDirectory("flow-service-old-result").toFile())
+        store.saveResult(FlowAnalysisResponse(flowId = "flow-1", status = AnalysisStatus.COMPLETED))
+        val service = newService(store = store)
+
+        val result = service.get("flow-1")
+
+        assertNotNull(result)
+        assertEquals(
+            listOf("generate-dashboard", "generate-monitors", "share-recording-json"),
+            result.actions.map { it.id }
+        )
+        assertEquals(result.actions, store.loadResult("flow-1")!!.actions)
+    }
+
+    @Test
+    fun `resubmitting backfills default actions on an old completed result`() {
+        val store = FlowAnalysisStore(createTempDirectory("flow-service-old-resubmit").toFile())
+        store.saveResult(FlowAnalysisResponse(flowId = "flow-1", status = AnalysisStatus.COMPLETED))
+        val service = newService(store = store)
+
+        val result = service.submitOrGetExisting(sampleRequest())
+
+        assertEquals(
+            listOf("generate-dashboard", "generate-monitors", "share-recording-json"),
+            result.actions.map { it.id }
+        )
+    }
+
+    @Test
     fun `a failing enrichment is recorded as an enrichment error but does not fail the flow`() {
         val service = newService(
             enrichments = listOf(
@@ -243,6 +273,19 @@ class FlowAnalysisServiceTest {
         assertNull(outcome.action.seerRunUrl, "without a Seer client there is no run url")
         assertEquals(ActionStatus.EXECUTED, store.storedFlowAction().status)
         assertEquals(ActionStatus.OPEN, store.storedFlowAction("generate-monitors").status)
+    }
+
+    @Test
+    fun `executeFlowAction backfills old completed results before executing`() = runBlocking {
+        val store = FlowAnalysisStore(createTempDirectory("flow-execute-flow-action-old-result").toFile())
+        store.saveResult(FlowAnalysisResponse(flowId = "flow-1", status = AnalysisStatus.COMPLETED))
+        val service = newService(store = store)
+
+        val outcome = service.executeFlowAction("flow-1", "generate-dashboard")
+
+        assertTrue(outcome is ExecuteFlowActionOutcome.Success)
+        assertEquals(ActionStatus.EXECUTED, outcome.action.status)
+        assertEquals(ActionStatus.EXECUTED, store.storedFlowAction().status)
     }
 
     @Test
