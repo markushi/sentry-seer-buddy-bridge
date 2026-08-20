@@ -62,19 +62,18 @@ class FlowAnalysisService(
 
         store.saveRequest(request)
 
-        demoResult?.let { demo ->
-            val result = demo(request.flowId)
-            scope.launch {
-                delay(5000L)
-            }
-            store.saveResult(result)
-            return result
-        }
-
         val initial = FlowAnalysisResponse(flowId = request.flowId, status = AnalysisStatus.PROCESSING)
         store.saveResult(initial)
 
-        scope.launch { runPipeline(request) }
+        if (demoResult != null) {
+            scope.launch {
+                delay(6000)
+                val result = demoResult(request.flowId)
+                store.saveResult(result)
+            }
+        } else {
+            scope.launch { runPipeline(request) }
+        }
 
         return initial
     }
