@@ -57,12 +57,12 @@ data class PerformanceCharacteristics(
     /** an explore query on sentry.io that shows the production data. */
     val link: String? = null,
     /** the duration found in the recording. */
-    val duration: String? = null,
-    val avg: String? = null,
-    val p50: String? = null,
-    val p75: String? = null,
-    val p90: String? = null,
-    val p95: String? = null
+    val duration: Double? = null,
+    val avg: Double? = null,
+    val p50: Double? = null,
+    val p75: Double? = null,
+    val p90: Double? = null,
+    val p95: Double? = null
 )
 
 /**

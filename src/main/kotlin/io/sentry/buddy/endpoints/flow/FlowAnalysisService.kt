@@ -16,6 +16,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 
@@ -46,7 +47,12 @@ class FlowAnalysisService(
     private val store: FlowAnalysisStore,
     private val enrichments: List<Enrichment> = emptyList(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-    private val seerClient: SeerClient? = null
+    private val seerClient: SeerClient? = null,
+    /**
+     * Demo mode. When it is there, a submit answers with this result instead of starting the
+     * analysis, so that a demo always shows the same recommendations without a wait.
+     */
+    private val demoResult: ((String) -> FlowAnalysisResponse)? = null
 ) {
 
     private val logger = LoggerFactory.getLogger(FlowAnalysisService::class.java)
@@ -55,6 +61,16 @@ class FlowAnalysisService(
         store.loadResult(request.flowId)?.let { return it.withDefaultActionsPersisted() }
 
         store.saveRequest(request)
+
+        demoResult?.let { demo ->
+            val result = demo(request.flowId)
+            scope.launch {
+                delay(5000L)
+            }
+            store.saveResult(result)
+            return result
+        }
+
         val initial = FlowAnalysisResponse(flowId = request.flowId, status = AnalysisStatus.PROCESSING)
         store.saveResult(initial)
 

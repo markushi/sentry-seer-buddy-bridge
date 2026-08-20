@@ -48,12 +48,12 @@ private data class SeerActionDto(
 private data class SeerPerformanceDto(
     @SerialName("span.op") val spanOp: String? = null,
     val link: String? = null,
-    val duration: String? = null,
-    val avg: String? = null,
-    val p50: String? = null,
-    val p75: String? = null,
-    val p90: String? = null,
-    val p95: String? = null
+    val duration: Double? = null,
+    val avg: Double? = null,
+    val p50: Double? = null,
+    val p75: Double? = null,
+    val p90: Double? = null,
+    val p95: Double? = null
 )
 
 /** A model writes `high` as readily as `HIGH`, and sometimes a word that is neither. */

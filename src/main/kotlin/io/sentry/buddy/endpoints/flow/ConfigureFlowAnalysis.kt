@@ -36,6 +36,13 @@ private fun defaultFlowAnalysisService(dataDir: File): FlowAnalysisService {
         null
     }
 
+    val demoResult = if (env("SEER_BUDDY_DEMO_MODE") != null) {
+        logger.info("Demo mode is on. Every new flow analysis answers with the packaged demo result.")
+        loadDemoResultTemplate()
+    } else {
+        null
+    }
+
     return FlowAnalysisService(
         store = FlowAnalysisStore(dataDir),
         enrichments = buildList {
@@ -44,6 +51,7 @@ private fun defaultFlowAnalysisService(dataDir: File): FlowAnalysisService {
             add(SdkUpgradeEnrichment())
             add(TitleEnrichment())
         },
-        seerClient = seerClient
+        seerClient = seerClient,
+        demoResult = demoResult
     )
 }

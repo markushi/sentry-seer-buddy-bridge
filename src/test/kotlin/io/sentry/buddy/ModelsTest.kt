@@ -66,12 +66,12 @@ class ModelsTest {
             performanceCharacteristics = PerformanceCharacteristics(
                 spanOp = "db.sql.query",
                 link = "https://sentry.io/explore/traces/?query=db",
-                duration = "820ms",
-                avg = "120ms",
-                p50 = "90ms",
-                p75 = "140ms",
-                p90 = "210ms",
-                p95 = "300ms"
+                duration = 820.0,
+                avg = 120.0,
+                p50 = 90.0,
+                p75 = 140.0,
+                p90 = 210.0,
+                p95 = 300.0
             )
         )
 
@@ -79,7 +79,7 @@ class ModelsTest {
 
         assertTrue(encoded.contains("\"performance_characteristics\""), "expected the key in $encoded")
         assertTrue(encoded.contains("\"span_op\":\"db.sql.query\""), "expected span_op in $encoded")
-        assertTrue(encoded.contains("\"p95\":\"300ms\""), "expected p95 in $encoded")
+        assertTrue(encoded.contains("\"p95\":300"), "expected p95 in $encoded")
         assertEquals(
             recommendation,
             appJson.decodeFromString(Recommendation.serializer(), encoded)

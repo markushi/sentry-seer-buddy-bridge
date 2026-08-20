@@ -134,12 +134,12 @@ class SeerRecommendationEnrichmentTest {
                 "performance_characteristics": {
                   "span.op": "db.sql.query",
                   "link": "https://sentry.io/explore/traces/?query=db",
-                  "duration": "820ms",
-                  "avg": "120ms",
-                  "p50": "90ms",
-                  "p75": "140ms",
-                  "p90": "210ms",
-                  "p95": "300ms"
+                  "duration": 820,
+                  "avg": 120,
+                  "p50": 90,
+                  "p75": 140,
+                  "p90": 210,
+                  "p95": 300
                 }
               }
             ]
@@ -149,12 +149,12 @@ class SeerRecommendationEnrichmentTest {
 
         assertEquals("db.sql.query", performance.spanOp)
         assertEquals("https://sentry.io/explore/traces/?query=db", performance.link)
-        assertEquals("820ms", performance.duration)
-        assertEquals("120ms", performance.avg)
-        assertEquals("90ms", performance.p50)
-        assertEquals("140ms", performance.p75)
-        assertEquals("210ms", performance.p90)
-        assertEquals("300ms", performance.p95)
+        assertEquals(820.0, performance.duration)
+        assertEquals(120.0, performance.avg)
+        assertEquals(90.0, performance.p50)
+        assertEquals(140.0, performance.p75)
+        assertEquals(210.0, performance.p90)
+        assertEquals(300.0, performance.p95)
     }
 
     @Test

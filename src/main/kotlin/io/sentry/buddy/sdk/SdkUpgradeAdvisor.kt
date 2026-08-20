@@ -39,7 +39,7 @@ class SdkUpgradeAdvisor(
     suspend fun upgradeRecommendation(sdk: String): Recommendation? {
         val currentVersion = parseSdkVersion(sdk) ?: return null
         val latestVersion = fetchLatestReleaseVersion() ?: return null
-//        if (!isOutdated(current = currentVersion, latest = latestVersion)) return null
+        if (!isOutdated(current = currentVersion, latest = latestVersion)) return null
 
         return Recommendation(
             id = UUID.randomUUID().toString(),

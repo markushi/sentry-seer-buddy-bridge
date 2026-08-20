@@ -43,12 +43,14 @@ class FlowAnalysisServiceTest {
     private fun newService(
         store: FlowAnalysisStore = FlowAnalysisStore(createTempDirectory("flow-service-test").toFile()),
         enrichments: List<Enrichment> = listOf(Enrichment { _, response -> response.copy(title = "Test title") }),
-        seerClient: SeerClient? = null
+        seerClient: SeerClient? = null,
+        demoResult: ((String) -> FlowAnalysisResponse)? = null
     ): FlowAnalysisService = FlowAnalysisService(
         store = store,
         enrichments = enrichments,
         scope = CoroutineScope(Dispatchers.Unconfined),
-        seerClient = seerClient
+        seerClient = seerClient,
+        demoResult = demoResult
     )
 
     private val startRequestCount = AtomicInteger()
@@ -86,6 +88,40 @@ class FlowAnalysisServiceTest {
         sdk = "io.sentry.android@8.40.0",
         events = listOf(FlowAnalysisEvent(type = "click", timestamp = 1500L, data = JsonObject(emptyMap())))
     )
+
+    @Test
+    fun `demo mode answers a submit with the template at once and skips the enrichments`() {
+        val enrichmentRuns = AtomicInteger()
+        val service = newService(
+            enrichments = listOf(Enrichment { _, response -> enrichmentRuns.incrementAndGet(); response }),
+            demoResult = { flowId ->
+                FlowAnalysisResponse(flowId = flowId, status = AnalysisStatus.COMPLETED, title = "Demo")
+            }
+        )
+
+        val accepted = service.submitOrGetExisting(sampleRequest())
+
+        assertEquals(AnalysisStatus.COMPLETED, accepted.status)
+        assertEquals("Demo", accepted.title)
+        assertEquals("flow-1", accepted.flowId)
+        assertEquals(0, enrichmentRuns.get())
+    }
+
+    @Test
+    fun `demo mode stores the template so a later get and an execute find it`() {
+        val store = FlowAnalysisStore(createTempDirectory("flow-service-demo").toFile())
+        val service = newService(
+            store = store,
+            demoResult = { flowId ->
+                FlowAnalysisResponse(flowId = flowId, status = AnalysisStatus.COMPLETED, title = "Demo")
+            }
+        )
+
+        service.submitOrGetExisting(sampleRequest())
+
+        assertEquals("Demo", service.get("flow-1")?.title)
+        assertNotNull(store.loadRequest("flow-1"), "expected the request to be stored for the Seer runs")
+    }
 
     @Test
     fun `submit accepts as PROCESSING then completes with a title`() {

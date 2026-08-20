@@ -38,12 +38,12 @@ that agree with this schema:
     "performance_characteristics": {
       "span.op": "span op, as found in the recording",
       "link": "a URL pointing to a explore query which opens sentry.io/explore/traces/",
-      "duration": "span duration, as found in the recording",
-      "avg": "avg duration queried from production data",
-      "p50": "p50 queried from production data",
-      "p75": "p75 queried from production data",
-      "p90": "p90 queried from production data",
-      "p95": "p95 queried from production data"
+      "duration": "span duration, as found in the recording, unquoted, as double",
+      "avg": "avg duration queried from production data, unquoted, as double",
+      "p50": "p50 queried from production data, unquoted, as double",
+      "p75": "p75 queried from production data, unquoted, as double",
+      "p90": "p90 queried from production data, unquoted, as double",
+      "p95": "p95 queried from production data, unquoted, as double"
     },
     "severity": "LOW | MEDIUM | HIGH"
   }

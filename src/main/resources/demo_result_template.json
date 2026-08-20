@@ -1,0 +1,144 @@
+{
+    "flow_id": "d0e92968-2b02-4cae-9024-ea8ea30f8b0f",
+    "status": "COMPLETED",
+    "title": "User session recorded error crash event with network timing.",
+    "recommendations": [
+        {
+            "id": "1f3b7a52-6c1e-42d0-9c8f-2b7e0a4d5c11",
+            "title": "Sentry SDK is outdated",
+            "description": "The recording uses io.sentry.android@8.40.0, but sentry-java 8.46.0 is available. The newer release includes fixes and instrumentation that this flow is missing.",
+            "link": "https://github.com/getsentry/sentry-java/releases/tag/8.46.0",
+            "severity": "LOW",
+            "status": "OPEN",
+            "actions": [
+                {
+                    "id": "3c9d1f80-5a2b-4e77-8d13-9f6c4a0e7b22",
+                    "action_label": "Open PR",
+                    "actionable_for_seer": true,
+                    "description": "Raise the Sentry SDK dependency of this project from 8.40.0 to 8.46.0, and adapt the code to the release notes if the upgrade needs it.",
+                    "link": null,
+                    "status": "OPEN",
+                    "seer_run_url": null
+                }
+            ],
+            "performance_characteristics": null
+        },
+        {
+            "id": "9064df73-27c3-4af2-b419-811e50038b39",
+            "title": "Span travel.db.load_trips is slow in production",
+            "description": "The recording loads trips in 84 ms, but in production the same span needs 612 ms on average and 1,480 ms at p95. Most users wait much longer than this recording shows.",
+            "link": "https://sentry-sdks.sentry.io/explore/traces/?query=span.op%3Atravel.db.load_trips&project=5428559",
+            "severity": "HIGH",
+            "status": "OPEN",
+            "actions": [
+                {
+                    "id": "f011d771-a6a7-4f22-a35a-be2d66708568",
+                    "action_label": "Build dashboard",
+                    "actionable_for_seer": true,
+                    "description": "Draft a Sentry dashboard for this user flow, with widgets for the travel.db.load_trips duration percentiles, the throughput per release, and the error rate of the screens in the flow. Give the queries and the rationale for each widget. Do not create the dashboard directly.",
+                    "link": null,
+                    "status": "OPEN",
+                    "seer_run_url": null
+                },
+                {
+                    "id": "7625f084-b66b-46e7-8c4b-d078dad50c5a",
+                    "action_label": "Show in Explore",
+                    "actionable_for_seer": false,
+                    "description": "Open the production data of the travel.db.load_trips span in Sentry Explore.",
+                    "link": "https://sentry-sdks.sentry.io/explore/traces/?query=span.op%3Atravel.db.load_trips&project=5428559",
+                    "status": "OPEN",
+                    "seer_run_url": null
+                },
+                {
+                    "id": "b58e2c47-70d9-4a16-9e35-c1d8f3a26d90",
+                    "action_label": "Copy Prompt",
+                    "actionable_for_seer": false,
+                    "description": "Copy a prompt for a local LLM: The Android span travel.db.load_trips takes 84 ms in a local recording, but 612 ms on average and 1,480 ms at p95 in production. Find the query behind this span, explain why it is slow at scale, and propose a fix.",
+                    "link": null,
+                    "status": "OPEN",
+                    "seer_run_url": null
+                }
+            ],
+            "performance_characteristics": {
+                "span_op": "travel.db.load_trips",
+                "link": "https://sentry-sdks.sentry.io/explore/traces/?query=span.op%3Atravel.db.load_trips&project=5428559",
+                "duration": 84.12,
+                "avg": 612.44,
+                "p50": 498.20,
+                "p75": 842.65,
+                "p90": 1204.31,
+                "p95": 1480.07
+            }
+        },
+        {
+            "id": "98ff4e20-e8c3-4ceb-afc6-1e48d6ae46bf",
+            "title": "OkHttp instrumentation is missing",
+            "description": "The flow goes through /home, /my-trips, /support and /profile without one network span. The Sentry OkHttp integration is not installed, thus all request latency stays invisible.",
+            "link": "https://docs.sentry.io/platforms/android/integrations/okhttp/",
+            "severity": "MEDIUM",
+            "status": "OPEN",
+            "actions": [
+                {
+                    "id": "c90ec01d-bf29-483d-a5e2-3fafe88619ae",
+                    "action_label": "Open PR",
+                    "actionable_for_seer": true,
+                    "description": "Add the Sentry OkHttp interceptor to every OkHttpClient of the app: OkHttpClient.Builder().addEventListener(SentryOkHttpEventListener()).addInterceptor(SentryOkHttpInterceptor()).build(). This creates http.client spans for all outbound requests.",
+                    "link": null,
+                    "status": "OPEN",
+                    "seer_run_url": null
+                },
+                {
+                    "id": "a41c6d09-8f52-4b31-b0ae-5d7e93c2f184",
+                    "action_label": "Open SDK docs",
+                    "actionable_for_seer": false,
+                    "description": "Open the Sentry documentation of the Android OkHttp integration.",
+                    "link": "https://docs.sentry.io/platforms/android/integrations/okhttp/",
+                    "status": "OPEN",
+                    "seer_run_url": null
+                }
+            ],
+            "performance_characteristics": null
+        }
+    ],
+    "issues": [
+        {
+            "id": "4444860701",
+            "title": "Exception: Breadcrumb button: exception with scope data",
+            "culprit": "transaction",
+            "count": 1,
+            "level": "error",
+            "permalink": "https://sentry-sdks.sentry.io/issues/4444860701/"
+        }
+    ],
+    "error": null,
+    "enrichment_errors": [],
+    "actions": [
+        {
+            "id": "generate-dashboard",
+            "action_label": "Dashboard",
+            "actionable_for_seer": true,
+            "description": "Draft a Sentry dashboard from this flow recording, including widgets, queries, and rationale for each widget. Do not create the dashboard directly.",
+            "link": null,
+            "status": "OPEN",
+            "seer_run_url": null
+        },
+        {
+            "id": "generate-monitors",
+            "action_label": "Monitors",
+            "actionable_for_seer": true,
+            "description": "Draft Sentry monitor candidates from this flow recording, including signals, thresholds, and rationale. Do not create monitors directly.",
+            "link": null,
+            "status": "OPEN",
+            "seer_run_url": null
+        },
+        {
+            "id": "share-recording-json",
+            "action_label": "Share JSON",
+            "actionable_for_seer": false,
+            "description": "Share the raw flow recording JSON. This action is handled locally by Buddy.",
+            "link": null,
+            "status": "OPEN",
+            "seer_run_url": null
+        }
+    ]
+}
